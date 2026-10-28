@@ -355,9 +355,15 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
   const order = (r) => (['bath', 'wc', 'storage', 'loggia'].includes(r.kind) ? 2 : r.kind === 'hall' ? 1 : 0);
   // ...unless the drawing says otherwise: the side each drawn door opens to ([x, y] of the doorway,
   // [x, y] half a metre into that side)
-  const swingAt = (c) => {
+  // (with the doorway's run: only a door drawn in this doorway - in a small lobby with four doors
+  // the nearest drawn door within 0.75 m was often the next one's; [4], [5]: the drawn hinge)
+  const swingAt = (c, r = null) => {
     let best = null, bd = 0.75;
     for (const q of plan.swings ?? []) {
+      if (r) {
+        const t = (q[0] - r.a[0]) * r.u[0] + (q[1] - r.a[1]) * r.u[1], dn = (q[0] - r.a[0]) * r.n[0] + (q[1] - r.a[1]) * r.n[1];
+        if (t < -0.15 || t > r.len + 0.15 || Math.abs(dn) > 0.4) continue;
+      }
       const d = Math.hypot(q[0] - c[0], q[1] - c[1]);
       if (d < bd) [best, bd] = [q, d];
     }
@@ -398,15 +404,19 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     const fit = fitted.includes(apt);
     // what is across the gap: a room of this flat, a loggia, the corridor, another flat
     const mx0 = (r.a[0] + r.b[0]) / 2, my0 = (r.a[1] + r.b[1]) / 2;
-    let across = null, depth = null;
+    let across = null, depth = null, walled = 0;
     for (let d = 0.04; d <= 0.8; d += 0.02) {
       const hit = roomsAt.at(mx0 - r.n[0] * d, my0 - r.n[1] * d) ?? terraceAt.at(mx0 - r.n[0] * d, my0 - r.n[1] * d);
       if (hit) {
         [across, depth] = [hit, d];
         break;
       }
+      // (a wall between the outline and the room across: the outline only stands off its wall -
+      // Regnum Plaza's sheets draw every doorway as a gap; a door here went through the wall)
+      if (solid.at(mx0 - r.n[0] * d, my0 - r.n[1] * d)?.kind === 'wall') walled++;
     }
     if (!across) return null; // nothing across: a hole to the outside, closed later
+    if (walled >= 3 && (plan.swings ?? []).length) return null;
     if (across.kind === 'room' && across.data.apt !== apt) return null; // into another flat: walled up later
     const glazed = across.kind === 'terrace' || (across.kind === 'room' && ['loggia', 'terrace'].includes(across.data.room.kind)) ||
       ['loggia', 'terrace'].includes(room.kind);
@@ -503,7 +513,7 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     // opens this door into the room on the other side: the leaf goes there (or back here, once
     // every room is done, if it does not fit there)
     const otherRoom = across.kind === 'room' ? across.data.room : null;
-    const drawn = swingAt(centre);
+    const drawn = swingAt(centre, r);
     if (drawn && (drawn[2] - drawn[0]) * r.n[0] + (drawn[3] - drawn[1]) * r.n[1] < 0 && across.kind === 'room') {
       later.push({ centre, hang: () => hang(room, r, face, centre, entrance, s0, s1, fit, glazed, otherRoom) });
       return [s0, s1];
@@ -773,7 +783,10 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
       while (d < 3 && solid.at(p[0] - r.u[0] * sgn * (d + 0.05) + r.n[0] * (s1 - 0.03), p[1] - r.u[1] * sgn * (d + 0.05) + r.n[1] * (s1 - 0.03))) d += 0.1;
       return d;
     };
-    const ends = reach(r.a, 1) <= reach(r.b, -1) ? [true, false] : [false, true];
+    // (the hinge as drawn, where the sheet draws this door)
+    const drawn = swingAt(centre, r);
+    const ends = drawn?.length >= 6 ? (dist(r.a, [drawn[4], drawn[5]]) <= dist(r.b, [drawn[4], drawn[5]]) ? [true, false] : [false, true])
+      : reach(r.a, 1) <= reach(r.b, -1) ? [true, false] : [false, true];
     // (into this room first; then, for settleLeaves, into the room across, from the far face)
     const sides = [[room, face, r.n]];
     if (other) sides.push([other, { a: [r.a[0] + r.n[0] * s0, r.a[1] + r.n[1] * s0], b: [r.b[0] + r.n[0] * s0, r.b[1] + r.n[1] * s0] }, [-r.n[0], -r.n[1]]]);
@@ -827,13 +840,15 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     };
     for (const apt of apts) {
       const mine = leafPlans.filter((L) => L.options.some((o) => apt.data.rooms.includes(o.room)));
-      const tight = mine.filter((A) => mine.some((B) => B !== A && gap(A, B) < 0.5));
-      if (!tight.length) continue;
+      if (!mine.length) continue;
       const door = entranceOf(entrances, apt);
       const start = door?.inside ?? interiorPoint(entranceHall(apt).poly);
       const all = () => [...segments, ...mine.map(seg)];
       const most = reachableRooms(apt, segments, start).size;
       if (reachableRooms(apt, all(), start).size >= most) continue;
+      // (the leaves that shut a way: two that meet, or one open across a narrow hall - a bathroom
+      // door opening out, as drawn, stood across the way to the rooms; every leaf may turn)
+      const tight = mine;
       // the hinges (and sides) that let the most of the flat be walked: rooms first, then floor
       // (a room may be reached at its doorway and no further)
       const score = () => reachableRooms(apt, all(), start).size * 1e6 + reachableRooms(apt, all(), start, true);
@@ -1116,7 +1131,7 @@ function onFoot(apt, x, y) {
   return false;
 }
 
-function reachableRooms(apt, segments, start, cells = false) {
+export function reachableRooms(apt, segments, start, cells = false) {
   // (the balconies and terraces too: a room may be reached across one)
   const out = [...apt.data.outline, ...apt.data.balconies.flatMap((q) => q.poly)], b = bbox(out), step = 0.1, R = 0.23; // a little more than the walker (0.2 m): furniture always leaves a way the visitor fits through
   const nx = Math.ceil((b.x1 - b.x0) / step) + 1, ny = Math.ceil((b.y1 - b.y0) / step) + 1;
