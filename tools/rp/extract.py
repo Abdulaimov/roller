@@ -474,6 +474,8 @@ def extract(key, debug=False):
                 rooms_raw=rooms, flats_raw=[dict(f, at=[round(v, 3) for v in fr.to_plan(f['x'], f['y'])],
                                                   colour=box_colour(R, f)) for f in text_flats])
     group_flats(plan, R)
+    import furniture as FU
+    FU.read(pg, fr, plan, R.rect)
     if debug:
         draw_debug(key, plan, R, ws)
     return plan
@@ -991,6 +993,29 @@ def draw_debug(key, plan, R, ws):
     for s in plan['swings']:
         a, b = R.px(s[0], s[1]), R.px(s[2], s[3])
         cv2.arrowedLine(img, (int(a[0]), int(a[1])), (int(b[0]), int(b[1])), (255, 0, 0), 4, tipLength=0.3)
+    import math as _m
+    for a in plan['apartments']:
+        for it in a['furniture']:
+            if it['type'] in ('rug',):
+                continue
+            if it['type'] == 'sofa':
+                q = [b[:4] + [b[6]] for b in it['boxes']]
+            elif it['type'] == 'bed':
+                q = [it['c'] + [it['l'], it['w'], it['f']]]
+            elif it['type'] in ('dining', 'ctable'):
+                q = [it['c'] + [it['w'], it['d'], it['a']]] + [[x, y, 0.42, 0.42, 0] for x, y, _ in it.get('chairs', [])]
+            else:
+                q = [it['c'] + [it['w'], it['d'], it['f'] + _m.pi / 2]]
+            for cx, cy, w, d, ang in q:
+                u, v = (_m.cos(ang), _m.sin(ang)), (-_m.sin(ang), _m.cos(ang))
+                pts = [(cx + u[0] * sw * w / 2 + v[0] * sd * d / 2, cy + u[1] * sw * w / 2 + v[1] * sd * d / 2) for sw, sd in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+                cv2.polylines(img, [P(pts)], True, (230, 0, 0), 3)
+            if 'f' in it and it['type'] != 'sofa':
+                a0 = R.px(*it['c'])
+                a1 = R.px(it['c'][0] + _m.cos(it['f']) * 0.5, it['c'][1] + _m.sin(it['f']) * 0.5)
+                cv2.arrowedLine(img, (int(a0[0]), int(a0[1])), (int(a1[0]), int(a1[1])), (0, 150, 0), 3, tipLength=0.4)
+            if 'c' in it:
+                cv2.putText(img, it['type'][:4], (int(R.px(*it['c'])[0]) - 20, int(R.px(*it['c'])[1])), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 0, 0), 2)
     for lf in plan['lifts']:
         c = R.px(*lf['c'])
         cv2.putText(img, f"{lf['q']}", (int(c[0]) - 40, int(c[1])), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 3)

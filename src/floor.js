@@ -1721,6 +1721,17 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
         piece(footprint(p, it.f, it.w, 0, it.d), 0, 'armchair');
         break;
       }
+      case 'shower': {
+        // a shower tray with a glass screen on its open side (Regnum Plaza's sheets)
+        const p = backOf(it);
+        k.at(p[0], p[1], it.f);
+        k.box(M.ceramic, -it.w / 2, 0, 0, it.w / 2, 0.06, it.d);
+        k.box(M.showerGlass, -it.w / 2, 0.06, it.d - 0.012, it.w / 2, 2.0, it.d);
+        k.box(M.chrome, -0.02, 1.88, 0.02, 0.02, 1.92, 0.32);
+        k.box(M.chrome, -0.1, 1.86, 0.25, 0.1, 1.88, 0.42);
+        piece(footprint(p, it.f, it.w, 0, it.d), 3, 'shower');
+        break;
+      }
       case 'ctable': {
         k.at(it.c[0], it.c[1], it.a - Math.PI / 2);
         F.nestTable(k, M, it.w, it.d, it.h);
@@ -2131,7 +2142,8 @@ function furnish(ctx) {
       // the run along a wall (under a window too: the sink goes there), 1.5 to 4.4 m long
       const run = fitAlong(ctx, sides, { minW: 1.2, maxW: 4.4, depth: 0.64, clear: 0.9, stretches: 'low' }, (len, s, t) => F.kitchen(k, M, len, H, windowSpans(s, t, len)))
         // (a narrow kitchen: a shorter run with less room in front)
-        ?? fitAlong(ctx, sides, { minW: 1.0, maxW: 3.0, depth: 0.6, clear: 0.7, stretches: 'low' }, (len, s, t) => F.kitchen(k, M, len, H, windowSpans(s, t, len)));
+        ?? fitAlong(ctx, sides, { minW: 1.0, maxW: 3.0, depth: 0.6, clear: 0.7, stretches: 'low' }, (len, s, t) => F.kitchen(k, M, len, H, windowSpans(s, t, len)))
+        ?? fitAlong(ctx, sides, { minW: 1.0, maxW: 3.0, depth: 0.6, clear: 0.6, stretches: 'free' }, (len, s, t) => F.kitchen(k, M, len, H, windowSpans(s, t, len)));
       let runSide = null;
       if (!run) ctx.notes.push(`kitchen ${room.area} m²: no wall for the kitchen run`);
       if (run) {
@@ -2272,15 +2284,14 @@ function bathroom(ctx) {
   const sides = rectSides(room, r, ctx.solid);
   // sanitary ware where the drawing gives none (Regnum Plaza's sheets draw it in thin black lines
   // that are not read yet): a bath along the longest wall if the room takes one, a basin, a WC
-  const drawn = (apt?.data.furniture ?? []).some((it) => ['toilet', 'bath', 'basin'].includes(it.type) && it.c && inside(room.poly, ...it.c));
-  if (!drawn) {
-    const bw = r.x1 - r.x0, bd = r.y1 - r.y0;
-    if (Math.max(bw, bd) >= 1.65 && Math.min(bw, bd) >= 1.45 && room.area >= 3.2) {
-      fitAlong(ctx, sides, { minW: 1.6, maxW: 1.7, depth: 0.72, clear: 0 }, (w) => F.bathtub(k, M, w, 0.72, 1));
-    }
-    fitAlong(ctx, sides, { minW: 0.55, maxW: 0.8, depth: 0.48, clear: 0.55 }, (w) => F.vanity(k, M, w, H, 1, 0.48));
-    fitAlong(ctx, sides, { minW: 0.5, maxW: 0.5, depth: 0.68, clear: 0.5 }, () => F.toilet(k, M, 0.5, 0.68, H));
+  // (what the sheet draws stands as drawn; only what it lacks, or what was not read, is added)
+  const drawn = new Set((apt?.data.furniture ?? []).filter((it) => it.c && inside(room.poly, ...it.c)).map((it) => it.type));
+  const bw = r.x1 - r.x0, bd = r.y1 - r.y0;
+  if (!drawn.has('bath') && !drawn.has('shower') && !drawn.size && Math.max(bw, bd) >= 1.65 && Math.min(bw, bd) >= 1.45 && room.area >= 3.2) {
+    fitAlong(ctx, sides, { minW: 1.6, maxW: 1.7, depth: 0.72, clear: 0 }, (w) => F.bathtub(k, M, w, 0.72, 1));
   }
+  if (!drawn.has('basin')) fitAlong(ctx, sides, { minW: 0.55, maxW: 0.8, depth: 0.48, clear: 0.55 }, (w) => F.vanity(k, M, w, H, 1, 0.48));
+  if (!drawn.has('toilet')) fitAlong(ctx, sides, { minW: 0.5, maxW: 0.5, depth: 0.68, clear: 0.5 }, () => F.toilet(k, M, 0.5, 0.68, H));
   // towel rail on a free wall, a bath mat
   const spot = bestWall(sides, 0.7);
   if (spot) place(ctx, spot.s, (spot.f.t0 + spot.f.t1) / 2, 0.6, 0.12, () => F.towelRail(k, M), { collide: false });
