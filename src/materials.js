@@ -356,6 +356,9 @@ const LIB = {
   'Strip dark': { color: '#3e3934', roughness: 0.55, metalness: 0.25, env: 0.6 },
   // the slab blocks (renders 1-3): golden sandstone cornices and bay frames; the narrow tall
   // glazing light grey, the dark strips dark green, the corner bays blue
+  // the facade's dark ground and white grid (the developer's model)
+  'Facade dark': { set: 'concrete', tile: 2.5, color: '#2a2e35', roughness: 0.42, metalness: 0.25, normal: 0.15, vary: 0.01, env: 1.1 },
+  'Pilaster white': { set: 'plaster', mapless: true, tile: 2.2, color: '#f2f0eb', roughness: 0.62, normal: 0.18, vary: 0.012, env: 0.9 },
   'Stone pale': { set: 'plaster', mapless: true, tile: 2.2, color: '#b8bbbe', roughness: 0.7, normal: 0.25, env: 0.6 },
   // the cornice bands: bronze-gold as on the renders (the earlier #e8c08a was the yellowest thing on the facade)
   'Stone gold': { set: 'plaster', mapless: true, tile: 2.2, color: '#d0a062', roughness: 0.62, normal: 0.35, vary: 0.03, env: 0.6 },

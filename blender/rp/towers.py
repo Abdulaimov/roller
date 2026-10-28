@@ -136,13 +136,46 @@ def facade_floor(mb, block, plan, h, top=False):
     # the white pilasters (grey outlines on the sheets), through the slab bands
     for q in plan.get('pilasters', []):
         mb.prism_chamfer(P(q), -0.25, h, 'Stone white', 'Stone white' if top else None, None, c=0.02)
+    facade_grid(mb, plan, h, enc, outside, outdoor, top)
+
+
+def facade_grid(mb, plan, h, enc, outside, outdoor, top):
+    """The facade as the developer's model shows it (photos IMG_4103-4110) and the renders: a white
+    grid on a dark ground. The outer faces of the walls are clad in dark panels (the rooms keep
+    their light walls inside); every window and balcony opening stands between white pilasters,
+    floor to floor, and the floors' white bands run across them."""
+    ring = enc.buffer(0.03, join_style='mitre').difference(enc.buffer(-0.005, join_style='mitre'))
+    holes = [P(q).buffer(0.02, join_style='mitre') for q in plan['windows'] + plan['glazing'] + plan.get('parapets', [])]
+    if not outdoor.is_empty:
+        holes.append(outdoor.buffer(0.12, join_style='mitre'))
+    clad = ring.difference(unary_union(holes)) if holes else ring
+    for q in parts(clad):
+        if q.area > 0.002:
+            mb.prism(q, -0.02, h + 0.02, 'Facade dark', 'Facade dark' if top else None)
+    # the white pilasters at the jambs of every opening in the outer wall
+    jambs = []
+    for q in plan['windows'] + plan['glazing'] + plan.get('parapets', []):
+        g = P(q)
+        c, u, v, L, t = axis(g)
+        if L < 0.5:
+            continue
+        s_out = 1 if outside.contains(Point(c[0] + v[0] * (t / 2 + 0.2), c[1] + v[1] * (t / 2 + 0.2))) else -1
+        if not outside.buffer(0.05).intersects(g.buffer(0.3)):
+            continue
+        face = (c[0] + v[0] * s_out * (t / 2 + 0.06), c[1] + v[1] * s_out * (t / 2 + 0.06))
+        for sg in (-1, 1):
+            p = (face[0] + u[0] * sg * (L / 2 + 0.11), face[1] + u[1] * sg * (L / 2 + 0.11))
+            if any(math.dist(p, j) < 0.3 for j in jambs):
+                continue
+            jambs.append(p)
+            mb.box(p[0], p[1], -0.3, 0.24, 0.16, h + 0.3, 'Pilaster white', rot=math.atan2(u[1], u[0]))
 
 
 def slab_mesh(mb, plan, h):
     enc = P(plan['enclosure'])
     mb.prism(enc.buffer(-0.04, join_style='mitre'), -0.25, SLAB, 'Stone white', 'Shop floor', 'Stone white')
-    ring = enc.buffer(0.1, join_style='mitre').difference(enc.buffer(-0.04, join_style='mitre'))
-    mb.prism_chamfer(ring, -0.3, 0.14, 'White band', 'White band', 'White band', c=0.02)
+    ring = enc.buffer(0.16, join_style='mitre').difference(enc.buffer(-0.04, join_style='mitre'))
+    mb.prism_chamfer(ring, -0.32, 0.14, 'White band', 'White band', 'White band', c=0.02)
 
 
 def crown(mb, block, plan, zr):
