@@ -1732,6 +1732,18 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
         piece(footprint(p, it.f, it.w, 0, it.d), 3, 'shower');
         break;
       }
+      case 'desk': {
+        // a desk as drawn, its back on the wall, and the chair drawn at it
+        const p = backOf(it);
+        k.at(p[0], p[1], it.f);
+        F.desk(k, M, it.w, it.d);
+        piece(footprint(p, it.f, it.w, 0, it.d), 1, 'desk');
+        for (const [x, y, f] of it.chairs ?? []) {
+          k.at(x - Math.cos(f) * 0.23, y - Math.sin(f) * 0.23, f);
+          F.chair(k, M);
+        }
+        break;
+      }
       case 'ctable': {
         k.at(it.c[0], it.c[1], it.a - Math.PI / 2);
         F.nestTable(k, M, it.w, it.d, it.h);
@@ -2039,7 +2051,6 @@ function furnish(ctx) {
       break;
     }
     case 'living': {
-      if (Math.min(w, d) < 2.4) break;
       const beforeTv = ctx.mark();
       // a sofa against a wall with the coffee table and a rug in front of it, a picture above it
       const sofaGroup = (sw2) => {
@@ -2065,6 +2076,13 @@ function furnish(ctx) {
         }
         return null;
       };
+      if (Math.min(w, d) < 2.4) {
+        // a narrow living room (its largest rectangle under 2.4 m across): the sofa on its own
+        // against a wall, never nothing
+        if (!sofaAlone()) ctx.notes.push(`living ${room.area} m²: no place for the sofa`);
+        pendant(ctx, cx, cy, 'drum');
+        break;
+      }
       const tv = fitAlong(ctx, sides, { minW: 1.4, maxW: 2.2, depth: 0.44, clear: 0.6, minAcross: 3.0 }, (cw) => F.mediaWall(k, M, cw));
       let sofaSide = null, tvT = null, tvS = null;
       if (tv) {

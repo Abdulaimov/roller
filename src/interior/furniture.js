@@ -185,6 +185,23 @@ export function bed(k, M, w = 1.6, L = 2.12) {
   if (!single) k.rbox(M.cushionB, cw / 2 + 0.02, 0.8, 0.79, cw, 0.3, 0.11, 0.05);
 }
 
+/** a writing desk against the wall, w wide, d deep: an oak top on black metal legs, a drawer
+ * unit at one end, a lamp and a few books; returns the lamp's light position */
+export function desk(k, M, w = 1.2, d = 0.6) {
+  const h = 0.75;
+  k.rbox(M.oak, 0, h - 0.015, d / 2, w, 0.03, d, 0.008, 1);
+  for (const x of [-w / 2 + 0.03, w / 2 - 0.03]) for (const z of [0.04, d - 0.04]) k.box(M.blackMetal, x - 0.015, 0, z - 0.015, x + 0.015, h - 0.03, z + 0.015);
+  const dw = Math.min(0.42, w * 0.32);
+  k.box(M.walnut, w / 2 - 0.06 - dw, h - 0.2, 0.05, w / 2 - 0.06, h - 0.03, d - 0.04);
+  k.box(M.brass, w / 2 - 0.06 - dw / 2 - 0.06, h - 0.12, d - 0.04, w / 2 - 0.06 - dw / 2 + 0.06, h - 0.11, d - 0.025);
+  // lamp and books at the back
+  k.cyl(M.blackMetal, -w / 2 + 0.18, h, 0.14, 0.07, 0.015, 20);
+  k.cyl(M.blackMetal, -w / 2 + 0.18, h, 0.14, 0.008, 0.38, 8);
+  k.lathe(M.shade, [[0.1, 0.32], [0.07, 0.46]], -w / 2 + 0.18, h, 0.14, 24);
+  for (let i = 0; i < 3; i++) k.box(M.color([0x6f5a46, 0x384a5c, 0xb8ad97][i], 0.8), -w / 2 + 0.34 + i * 0.035, h, 0.06, -w / 2 + 0.365 + i * 0.035, h + 0.22 - i * 0.02, 0.22);
+  return new THREE.Vector3(-w / 2 + 0.18, h + 0.4, 0.14);
+}
+
 /** returns the lamp's light position */
 export function nightstand(k, M, w = 0.48, d = 0.4) {
   const h = 0.5;
@@ -237,13 +254,14 @@ export function kitchen(k, M, len, h, windows = [], opt = {}) {
   let sink, hob;
   const clampC = (c, w) => Math.min(Math.max(c, x0 + w / 2), x1 - w / 2);
   if (drawn) {
+    // (null: the drawing has no sink, or no hob, on this run - the second run of an L or a galley)
     const sw = opt.bowls === 2 ? 0.8 : 0.6, hw = 0.6;
-    const sc = clampC(opt.sink ?? x1 - sw / 2, sw);
-    let hc = clampC(opt.hob ?? (sc > 0 ? x0 + hw / 2 : x1 - hw / 2), hw);
-    if (Math.abs(hc - sc) < (sw + hw) / 2) hc = clampC(sc + Math.sign(hc - sc || 1) * (sw + hw) / 2, hw);
-    sink = [sc - sw / 2, sc + sw / 2];
-    hob = [hc - hw / 2, hc + hw / 2];
-    const fixed = [[...sink, 'sink'], [...hob, 'hob']].sort((p, q) => p[0] - q[0]);
+    const sc = opt.sink === null ? null : clampC(opt.sink ?? x1 - sw / 2, sw);
+    let hc = opt.hob === null ? null : clampC(opt.hob ?? (sc > 0 ? x0 + hw / 2 : x1 - hw / 2), hw);
+    if (sc !== null && hc !== null && Math.abs(hc - sc) < (sw + hw) / 2) hc = clampC(sc + Math.sign(hc - sc || 1) * (sw + hw) / 2, hw);
+    sink = sc === null ? null : [sc - sw / 2, sc + sw / 2];
+    hob = hc === null ? null : [hc - hw / 2, hc + hw / 2];
+    const fixed = [sink && [...sink, 'sink'], hob && [...hob, 'hob']].filter(Boolean).sort((p, q) => p[0] - q[0]);
     // the stretches between them in modules of up to 60 cm, drawers at the ends of the run
     let a0 = x0;
     for (const f of [...fixed, [x1, x1, 'end']]) {
@@ -293,33 +311,38 @@ export function kitchen(k, M, len, h, windows = [], opt = {}) {
     }
   }
   // worktop with the sink cut out
-  const bowls = drawn ? opt.bowls ?? 1 : 1;
-  const sa = sink[0] + 0.06, sb = sink[1] - 0.06, sz0 = 0.08, sz1 = Math.min(0.52, d - 0.1);
   const T = 0.03, wt = (mat, ax, az, bx, bz) => k.box(mat, ax, top - T, az, bx, top, bz);
-  wt(M.quartz, x0, 0, sa, d);
-  wt(M.quartz, sb, 0, x1, d);
-  wt(M.quartz, sa, 0, sb, sz0);
-  wt(M.quartz, sa, sz1, sb, d);
-  // the bowls (a ridge between two)
-  const bw = (sb - sa - (bowls - 1) * 0.04) / bowls;
-  for (let i = 0; i < bowls; i++) {
-    const ba = sa + i * (bw + 0.04), bb = ba + bw;
-    k.box(M.steel, ba, top - 0.2, sz0, bb, top - 0.19, sz1);
-    k.box(M.steel, ba, top - 0.2, sz0, ba + 0.01, top - T, sz1);
-    k.box(M.steel, bb - 0.01, top - 0.2, sz0, bb, top - T, sz1);
-    k.box(M.steel, ba, top - 0.2, sz0, bb, top - T, sz0 + 0.01);
-    k.box(M.steel, ba, top - 0.2, sz1 - 0.01, bb, top - T, sz1);
-    if (i > 0) k.box(M.steel, ba - 0.04, top - 0.012, sz0, ba, top - 0.002, sz1);
+  if (!sink) wt(M.quartz, x0, 0, x1, d);
+  const bowls = drawn ? opt.bowls ?? 1 : 1;
+  const sa = sink ? sink[0] + 0.06 : x1, sb = sink ? sink[1] - 0.06 : x1, sz0 = 0.08, sz1 = Math.min(0.52, d - 0.1);
+  if (sink) {
+    wt(M.quartz, x0, 0, sa, d);
+    wt(M.quartz, sb, 0, x1, d);
+    wt(M.quartz, sa, 0, sb, sz0);
+    wt(M.quartz, sa, sz1, sb, d);
+    // the bowls (a ridge between two)
+    const bw = (sb - sa - (bowls - 1) * 0.04) / bowls;
+    for (let i = 0; i < bowls; i++) {
+      const ba = sa + i * (bw + 0.04), bb = ba + bw;
+      k.box(M.steel, ba, top - 0.2, sz0, bb, top - 0.19, sz1);
+      k.box(M.steel, ba, top - 0.2, sz0, ba + 0.01, top - T, sz1);
+      k.box(M.steel, bb - 0.01, top - 0.2, sz0, bb, top - T, sz1);
+      k.box(M.steel, ba, top - 0.2, sz0, bb, top - T, sz0 + 0.01);
+      k.box(M.steel, ba, top - 0.2, sz1 - 0.01, bb, top - T, sz1);
+      if (i > 0) k.box(M.steel, ba - 0.04, top - 0.012, sz0, ba, top - 0.002, sz1);
+    }
+    // tap
+    const tx = (sa + sb) / 2;
+    k.cyl(M.chrome, tx, top, 0.05, 0.025, top + 0.05, 16);
+    k.tube(M.chrome, [[tx, top + 0.04, 0.05], [tx, top + 0.3, 0.05], [tx, top + 0.36, 0.12], [tx, top + 0.3, 0.2], [tx, top + 0.24, 0.21]], 0.012, 24);
   }
-  // tap
-  const tx = (sa + sb) / 2;
-  k.cyl(M.chrome, tx, top, 0.05, 0.025, top + 0.05, 16);
-  k.tube(M.chrome, [[tx, top + 0.04, 0.05], [tx, top + 0.3, 0.05], [tx, top + 0.36, 0.12], [tx, top + 0.3, 0.2], [tx, top + 0.24, 0.21]], 0.012, 24);
   // hob
-  const ha = hob[0] + 0.04, hb = hob[1] - 0.04;
-  k.box(M.blackGlass, ha, top, 0.05, hb, top + 0.006, Math.min(0.56, d - 0.04));
-  for (const [fx, fz, r] of [[0.28, 0.3, 0.09], [0.72, 0.3, 0.07], [0.28, 0.7, 0.07], [0.72, 0.7, 0.09]]) {
-    k.lathe(M.color(0x3a3b3d, 0.3), [[r, 0], [r - 0.005, 0.0008], [0, 0.0008]], ha + (hb - ha) * fx, top + 0.006, 0.05 + (Math.min(0.56, d - 0.04) - 0.05) * fz, 32);
+  if (hob) {
+    const ha = hob[0] + 0.04, hb = hob[1] - 0.04;
+    k.box(M.blackGlass, ha, top, 0.05, hb, top + 0.006, Math.min(0.56, d - 0.04));
+    for (const [fx, fz, r] of [[0.28, 0.3, 0.09], [0.72, 0.3, 0.07], [0.28, 0.7, 0.07], [0.72, 0.7, 0.09]]) {
+      k.lathe(M.color(0x3a3b3d, 0.3), [[r, 0], [r - 0.005, 0.0008], [0, 0.0008]], ha + (hb - ha) * fx, top + 0.006, 0.05 + (Math.min(0.56, d - 0.04) - 0.05) * fz, 32);
+    }
   }
   // splashback and wall cabinets with a light strip under them, in the stretches between windows
   const ub = 1.48, ut = Math.min(h - 0.01, 2.36), ud = Math.min(0.35, d - 0.12);
@@ -346,7 +369,7 @@ export function kitchen(k, M, len, h, windows = [], opt = {}) {
     if (h - ut > 0.02) k.box(M.lacquer, sx0, ut, 0, sx1, h, ud);
   }
   // hood over the hob, under the cabinets
-  if (drawn) k.box(M.steel, hob[0] + 0.04, ub - 0.06, 0.02, hob[1] - 0.04, ub - 0.01, Math.min(0.48, d - 0.06));
+  if (drawn && hob) k.box(M.steel, hob[0] + 0.04, ub - 0.06, 0.02, hob[1] - 0.04, ub - 0.01, Math.min(0.48, d - 0.06));
   // tall fridge housing
   if (fridge) {
     const a = x1 + 0.002, b = x0 + len;
@@ -370,7 +393,7 @@ export function kitchen(k, M, len, h, windows = [], opt = {}) {
     k.lathe(M.ceramic, [[0, 0], [0.06, 0], [0.12, 0.05], [0.13, 0.09], [0.12, 0.09], [0.11, 0.055], [0, 0.01]], fx, top, 0.3, 24);
     for (let i = 0; i < 3; i++) k.sphere(M.color([0xd9902b, 0xb43b2c, 0x8fb04a][i], 0.4), fx + (i - 1) * 0.05, top + 0.08, 0.3 + (i % 2) * 0.03, 0.035, 1, 1, 1, 1);
   }
-  k.lathe(M.blackGlass, [[0, 0], [0.035, 0], [0.035, 0.2], [0.012, 0.26], [0.012, 0.3], [0, 0.3]], Math.min(sb + 0.2, x1 - 0.06), top, 0.12, 16);
+  if (sink) k.lathe(M.blackGlass, [[0, 0], [0.035, 0], [0.035, 0.2], [0.012, 0.26], [0.012, 0.3], [0, 0.3]], Math.min(sb + 0.2, x1 - 0.06), top, 0.12, 16);
   return [new THREE.Vector3((x0 + x1) / 2, ub - 0.05, ud)];
 }
 

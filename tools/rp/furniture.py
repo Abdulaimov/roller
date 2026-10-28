@@ -27,6 +27,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fsym  # noqa: E402
 
 R3 = lambda v: round(float(v), 3)
+NAMES = {'kitchen': ('Kitchen', 'Кухня', 'Ошхона'), 'living': ('Living room', 'Гостиная', 'Меҳмонхона')}
+MAIN = {'bedroom': ('bed', 'sofa'), 'living': ('sofa', 'armchair'), 'kitchen': ('kitchen', 'sofa')}
 
 
 def rect_poly(c, w, l, a):
@@ -61,16 +63,43 @@ def read(pg, fr, plan, rect):
         # how much of its box the drawing fills (a bed with a desk stuck to it fills it badly)
         c['fill'] = c['shape'].area / max(c['w'] * c['l'], 1e-6) if c['shape'].geom_type in ('Polygon', 'MultiPolygon') else 0
         c['hull'] = c['geom'].convex_hull.area / max(c['w'] * c['l'], 1e-6)
+        # (a sofa drawn with corners that do not close, or touching the radiator under the window
+        # behind it, makes only small faces: for sofas, the box of all its lines too)
+        hull = c['geom'].convex_hull
+        if hull.area > 0.15 and c['shape'].area < 0.5 * hull.area:
+            cc, w, l, a = fsym.mrr(c['geom'])
+            fill = hull.area / max(w * l, 1e-6)
+            c['alt'] = dict(c=cc, w=w, l=l, a=a, fill=fill, hull=fill, faces=c['faces'], curves=c['curves'])
     out_all = {}
     for ai, apt in enumerate(plan['apartments']):
         items = []
         for room in apt['rooms']:
+            room.update(room.pop('sheet', {}))   # (read again: as the sheet signs it first)
             rp = Polygon(room['poly']).buffer(0.08)
             inside = lambda q: rp.contains(Point(*q['c']))
             R = [r for r in rects if inside(r)]
             C = [c for c in comps if inside(c) and c['l'] > 0.2]
-            got = by_kind(room['kind'], R, C, solid, rp)
-            items += fit_room(got, Polygon(room['poly']).buffer(0), solid)
+            curves_in(R, [c for c in comps if inside(c)])
+            # (what a piece stands against: the walls, and the room's own edge - a few partitions
+            # are drawn as a single thin line that the plan's walls do not have)
+            edge = solid if room['kind'] == 'bath' else solid.union(Polygon(room['poly']).buffer(0).exterior.buffer(0.03))
+            got = by_kind(room['kind'], R, C, edge, rp)
+            as_kind = next((it.pop('room_kind') for it in got if 'room_kind' in it), None)
+            for it in got:
+                it.pop('room_kind', None)
+            fitted = fit_room(got, Polygon(room['poly']).buffer(0), solid)
+            # (a room whose main piece did not fit keeps nothing of the drawing: the viewer
+            # furnishes it whole, rather than leave a rug and a desk without the bed or the sofa)
+            main = MAIN.get(as_kind or room['kind'])
+            if main and not any(it['type'] in main for it in fitted):
+                fitted = []
+            if as_kind and fitted:
+                # (the sheet signs it «Хонаи хоб», but draws a kitchen or a living room in it: the
+                # flat's room count agrees with the drawing)
+                room['sheet'] = {k: room[k] for k in ('kind', 'name', 'ru', 'tj')}
+                room['kind'] = as_kind
+                room['name'], room['ru'], room['tj'] = NAMES[as_kind]
+            items += fitted
         apt['furniture'] = items
         out_all[ai] = items
     return out_all
@@ -106,7 +135,7 @@ def fit_room(items, room, solid):
             inner_ = inner
             inner = room.buffer(-0.03).difference(solid.buffer(0.03))
         ok = inner.contains(footprint(it))
-        if not ok and it['type'] in ('bath', 'shower', 'kitchen', 'basin', 'toilet', 'bed', 'tv'):
+        if not ok and it['type'] in ('bath', 'shower', 'kitchen', 'basin', 'toilet', 'bed', 'tv', 'desk'):
             # off the wall behind it by up to 15 cm, then a little smaller
             keys = ('w', 'l') if it['type'] == 'bed' else ('w', 'd')
             n = (math.cos(it['f']), math.sin(it['f']))
@@ -115,10 +144,20 @@ def fit_room(items, room, solid):
                     trial = dict(it, c=[R3(it['c'][0] + n[0] * m), R3(it['c'][1] + n[1] * m)], **{kk: R3(it[kk] * (1 - 0.025 * k)) for kk in keys})
                     if it['type'] == 'bed':
                         trial['stands'] = [[R3(x + n[0] * m), R3(y + n[1] * m), w_, d_] for x, y, w_, d_ in it['stands']]
+                    if it['type'] == 'desk':
+                        trial['chairs'] = [[R3(x + n[0] * m), R3(y + n[1] * m), a_] for x, y, a_ in it['chairs']]
                     if inner.contains(footprint(trial)):
                         it, ok = trial, True
                         break
                 if ok:
+                    break
+        if not ok and it['type'] == 'sofa':
+            # (off the wall behind it by up to 15 cm, the back drawn into the wall)
+            n = (math.cos(it.get('f', 0)), math.sin(it.get('f', 0)))
+            for m in (0.03, 0.06, 0.09, 0.12, 0.15):
+                trial = dict(it, boxes=[[R3(b[0] + n[0] * m), R3(b[1] + n[1] * m)] + b[2:] for b in it['boxes']])
+                if inner.contains(footprint(trial)):
+                    it, ok = trial, True
                     break
         if not ok and it['type'] == 'dining':
             for k in range(1, 8):
@@ -167,60 +206,244 @@ def by_kind(kind, R, C, solid, rp):
         out = []
         run = kitchen(R, C, solid) if kind == 'kitchen' else None
         if run:
-            out.append(run)
+            out += runs_of(run, R, C, solid)
         din = dining(R, solid)
         if din:
             out.append(din)
         if kind == 'living' and not run:
             run = kitchen(R, C, solid)   # a kitchen-living room (В: «меҳмонхона ба толори таомхӯрӣ»)
             if run:
-                out.insert(0, run)
+                out = runs_of(run, R, C, solid) + out
         if kind == 'living' or (kind == 'kitchen' and not run):
-            liv = living(R, C, solid)
+            liv = living(R, C, solid, rp)
             if liv:
-                out += liv
+                out += liv + desks_tv(R, C, solid, out + liv)
             elif kind == 'living':
                 return []
         return out if (run or kind == 'living') else []
     if kind == 'bedroom':
-        return bedroom(R, C, solid)
+        out = bedroom(R, C, solid)
+        if out:
+            return out + desks_tv(R, C, solid, out)
+        # no bed drawn: what the sheet draws there instead. A kitchen run (the room is the flat's
+        # kitchen, signed «Хонаи хоб» on the sheet by mistake) or a sofa (a living room signed so,
+        # with its armchairs and dining table; or a sofa bed with a desk)
+        run = kitchen(R, C, solid)
+        if run:
+            out = runs_of(run, R, C, solid)
+            din = dining(R, solid)
+            out += [din] if din else []
+            return [dict(it, room_kind='kitchen') for it in out]
+        liv = living(R, C, solid, rp)
+        if liv:
+            din = dining(R, solid)
+            out = liv + ([din] if din else [])
+            if din or any(it['type'] == 'armchair' for it in liv):
+                out = [dict(it, room_kind='living') for it in out]
+            return out + desks_tv(R, C, solid, out)
+        # (armchairs round a coffee table and a dining table, the sofa not read: a living room too)
+        arms = [r for r in R if 0.62 <= r['w'] <= 0.98 and r['l'] <= 1.0]
+        din = dining(R, solid)
+        if len(arms) >= 2 and din:
+            mx, my = sum(r['c'][0] for r in arms) / len(arms), sum(r['c'][1] for r in arms) / len(arms)
+            out = [dict(type='armchair', c=[R3(r['c'][0]), R3(r['c'][1])], w=R3(r['w']), d=R3(r['l']),
+                        f=R3(math.atan2(my - r['c'][1], mx - r['c'][0]))) for r in arms]
+            for r in R:
+                if 0.5 <= r['w'] <= 0.8 and 0.8 <= r['l'] <= 1.4 and math.dist(r['c'], (mx, my)) < 0.6:
+                    out.append(dict(type='ctable', c=[R3(r['c'][0]), R3(r['c'][1])], w=R3(r['l']), d=R3(r['w']), a=R3(r['a']), h=0.4))
+                    break
+            out.append(din)
+            out = [dict(it, room_kind='living') for it in out]
+            return out + desks_tv(R, C, solid, out)
+        return []
     if kind == 'bath':
         return bathroom(R, C, solid)
     return []
 
 
-def kitchen(R, C, solid):
+def marks(R, C):
+    return [dict(c=c['c'], l=c['l'], curves=c['curves']) for c in C if c['l'] < 0.95] + \
+        [dict(c=r['c'], l=r['l'], curves=r['curves']) for r in R if r.get('curves') and 0.3 <= r['w'] <= 0.7 and 0.4 <= r['l'] <= 0.95]
+
+
+def curves_in(R, C0):
+    """every closed box gets the number of curve pieces drawn in it (by any drawing in the room): a
+    hob is a box with its four rings (16 and more), a sink a box with a rounded bowl. (The rings are
+    small drawings of their own, or part of the worktop's one big drawing.)"""
+    pts = [s_[0].interpolate(0.5, normalized=True) for c in C0 for s_ in c['segs'] if s_[1]]
+    for r in R:
+        q = r['poly'].buffer(-0.01)
+        r['curves'] = sum(1 for p in pts if q.contains(p))
+
+
+def is_hob(m):
+    return m['curves'] >= 8 and 0.4 <= m['l'] <= 0.9
+
+
+def kitchen(R, C, solid, runs=None):
     tops = [r for r in R if r['thick'] and 0.5 <= r['w'] <= 0.78 and r['l'] >= 0.9]
+    # (a worktop outlined in heavy lines that do not make one closed path)
+    tops += [dict(c=c['c'], w=c['w'], l=c['l'], a=c['a'], poly=rect_poly(c['c'], c['w'], c['l'], c['a']), thick=True)
+             for c in C if c['thick'] >= 2 and 0.5 <= c['w'] <= 0.78 and c['l'] >= 0.9 and c['fill'] > 0.8]
+    M = marks(R, C)
+    hobs = [m for m in M if is_hob(m)]
+    on_hob = lambda t: any(t['poly'].buffer(0.05).contains(Point(*h['c'])) for h in hobs)
     if not tops:
         # (a worktop drawn in thin lines: the long box with the hob on it)
-        hobs = [c for c in C if c['curves'] >= 8 and 0.4 <= c['l'] <= 0.9]
-        tops = [r for r in R if 0.52 <= r['w'] <= 0.75 and r['l'] >= 1.4 and any(r['poly'].buffer(0.05).contains(Point(*h['c'])) for h in hobs)]
+        tops = [r for r in R if 0.52 <= r['w'] <= 0.75 and r['l'] >= 1.2 and on_hob(r)]
+        tops += [dict(c=c['c'], w=c['w'], l=c['l'], a=c['a'], poly=rect_poly(c['c'], c['w'], c['l'], c['a']), thick=False)
+                 for c in C if 0.52 <= c['w'] <= 0.75 and c['l'] >= 1.2 and c['fill'] > 0.7]
+        tops = [t for t in tops if on_hob(t)]
+    if not tops:
+        # (the cabinets drawn one by one, 0.5-0.7 deep, side by side along a wall - a kitchen only
+        # with the hob drawn on it: wardrobes are boxes on a wall too)
+        tops = [t for t in modules(R, C, solid) if on_hob(t)]
+    if runs is not None:
+        # (the other runs of the kitchen: any worktop or row of cabinets against a wall)
+        runs.extend(tops)
+        runs.extend(modules(R, C, solid))
+        runs.extend(r for r in R if 0.52 <= r['w'] <= 0.75 and r['l'] >= 1.0)
     if not tops:
         return None
-    t = max(tops, key=lambda r: r['l'])
+    t = max(tops, key=lambda r: (on_hob(r), r['l']))
+    return run_item(t, M, solid)
+
+
+def run_item(t, M, solid):
     f, dw = wall_front(t['c'], t['w'], t['l'], t['a'], solid)
     if dw > 0.6:
         return None
     fx = (-math.sin(f), math.cos(f))   # the viewer's frame x of the run
     tp = t['poly'].buffer(0.05)
-    on = [c for c in C if tp.contains(Point(*c['c'])) and c['l'] < 0.95]
-    hob = next((c for c in on if c['curves'] >= 8 and 0.4 <= c['l'] <= 0.9), None)
-    sink = next((c for c in on if c is not hob and c['curves'] >= 1 and 0.3 <= c['l'] <= 0.95), None)
+    on = [m for m in M if tp.contains(Point(*m['c']))]
+    hob = next((m for m in on if is_hob(m)), None)
+    sink = next((m for m in on if m is not hob and 1 <= m['curves'] < 16 and 0.3 <= m['l'] <= 0.95 and (hob is None or math.dist(m['c'], hob['c']) > 0.3)), None)
     x = lambda c: (c['c'][0] - t['c'][0]) * fx[0] + (c['c'][1] - t['c'][1]) * fx[1]
     it = dict(type='kitchen', c=[R3(t['c'][0]), R3(t['c'][1])], w=R3(t['l']), d=R3(t['w']), f=R3(f),
               sink=R3(x(sink)) if sink else R3(-t['l'] / 4), bowls=1, hob=R3(x(hob)) if hob else R3(t['l'] / 4))
+    if not hob:
+        it['hob'] = None   # (a run without the hob: cabinets only, its sink where drawn)
+        if not sink:
+            it['sink'] = None
     return it
 
 
+def modules(R, C, solid):
+    """kitchen cabinets drawn as separate boxes: each 0.5-0.7 m deep with its back on a wall; the
+    boxes on one wall line, no more than 0.5 m apart (a cabinet drawn as the worktop alone), make a run (a box for each run, as a worktop)"""
+    boxes = [dict(c=r['c'], w=r['w'], l=r['l'], a=r['a']) for r in R if not r['thick']]
+    boxes += [dict(c=c['c'], w=c['w'], l=c['l'], a=c['a']) for c in C if c['fill'] > 0.85 and c['l'] <= 1.3]
+    found = []
+    for b in boxes:
+        u = (math.cos(b['a']), math.sin(b['a']))
+        v = (-u[1], u[0])
+        for n, depth, along in ((u, b['l'], b['w']), ((-u[0], -u[1]), b['l'], b['w']), (v, b['w'], b['l']), ((-v[0], -v[1]), b['w'], b['l'])):
+            if not (0.5 <= depth <= 0.72 and 0.3 <= along <= 1.3):
+                continue
+            # (the sheets draw some runs a few centimetres off the wall)
+            back = Point(b['c'][0] - n[0] * (depth / 2 + 0.04), b['c'][1] - n[1] * (depth / 2 + 0.04))
+            if solid.distance(back) > 0.18:
+                continue
+            t = (-n[1], n[0])   # along the wall
+            off = b['c'][0] * n[0] + b['c'][1] * n[1] - depth / 2   # the back's line
+            s0 = b['c'][0] * t[0] + b['c'][1] * t[1]
+            found.append(dict(n=n, t=t, off=off, s0=s0 - along / 2, s1=s0 + along / 2, depth=depth))
+    runs = []
+    for q in sorted(found, key=lambda q: q['s0']):
+        for r_ in runs:
+            if abs(r_['n'][0] - q['n'][0]) < 0.1 and abs(r_['n'][1] - q['n'][1]) < 0.1 and abs(r_['off'] - q['off']) < 0.15 and q['s0'] <= r_['s1'] + 0.5:
+                r_['s1'] = max(r_['s1'], q['s1'])
+                r_['depth'] = max(r_['depth'], q['depth'])
+                break
+        else:
+            runs.append(dict(q))
+    out = []
+    for r_ in runs:
+        L = r_['s1'] - r_['s0']
+        if L < 0.9:
+            continue
+        n, t, d = r_['n'], r_['t'], min(r_['depth'], 0.65)
+        sm = (r_['s0'] + r_['s1']) / 2
+        c = (n[0] * (r_['off'] + d / 2) + t[0] * sm, n[1] * (r_['off'] + d / 2) + t[1] * sm)
+        a = math.atan2(t[1], t[0])
+        out.append(dict(c=c, w=d, l=L, a=a, poly=rect_poly(c, d, L, a), thick=False))
+    return out
+
+
+def runs_of(run, R, C, solid):
+    """the run read, and a second run on another wall (an L-shaped kitchen), cut back where it
+    meets the first"""
+    out = [run]
+    tops = []
+    kitchen(R, C, solid, tops)
+    first = rect_poly(run['c'], run['d'], run['w'], run['f'] + math.pi / 2).buffer(0.02)
+    for t in sorted(tops, key=lambda r: -r['l']):
+        if t['poly'].centroid.distance(Point(*run['c'])) < 0.2:
+            continue
+        u = (math.cos(t['a']), math.sin(t['a']))
+        # shorten it from the end that runs into the first run
+        c, L = t['c'], t['l']
+        for _ in range(30):
+            if not rect_poly(c, t['w'], L, t['a']).intersects(first) or L < 0.9:
+                break
+            ends = [(c[0] + u[0] * L / 2, c[1] + u[1] * L / 2), (c[0] - u[0] * L / 2, c[1] - u[1] * L / 2)]
+            sg = 1 if first.distance(Point(*ends[0])) < first.distance(Point(*ends[1])) else -1
+            L -= 0.05
+            c = (c[0] - u[0] * sg * 0.025, c[1] - u[1] * sg * 0.025)
+        if L < 0.9 or rect_poly(c, t['w'], L, t['a']).intersects(first):
+            continue
+        it = run_item(dict(t, c=c, l=L, poly=rect_poly(c, t['w'], L, t['a'])), marks(R, C), solid)
+        if it is None or wall_front(c, t['w'], L, t['a'], solid)[1] > 0.15:
+            continue
+        out.append(it)
+        break
+    return out
+
+
+def desks_tv(R, C, solid, got):
+    """a desk (0.45-0.68 deep, 0.9-1.9 long) against a wall, with the chair drawn at it; a TV
+    stand (the slim box) - in a bedroom or a living room, where nothing read stands"""
+    taken = [footprint(it) for it in got if it['type'] not in ('rug',)]
+    free = lambda poly: not any(poly.intersects(t.buffer(-0.03)) for t in taken)
+    chairs = [c for c in C if c['curves'] >= 6 and 0.35 <= c['w'] <= 0.7 and c['l'] <= 0.75]
+    chairs += [dict(c=r['c']) for r in R if not r['thick'] and 0.36 <= r['w'] <= 0.58 and r['l'] <= 0.62]
+    out = []
+    for r in sorted(R, key=lambda r: -r['l']):
+        if not (0.45 <= r['w'] <= 0.68 and 0.9 <= r['l'] <= 1.9) or not free(r['poly']):
+            continue
+        f, dw = wall_front(r['c'], r['w'], r['l'], r['a'], solid)
+        if dw > 0.15:
+            continue
+        n = (math.cos(f), math.sin(f))
+        front = (r['c'][0] + n[0] * (r['w'] / 2 + 0.3), r['c'][1] + n[1] * (r['w'] / 2 + 0.3))
+        ch = [q for q in chairs if math.dist(q['c'], front) < 0.6 and not r['poly'].buffer(-0.03).contains(Point(*q['c']))][:2]
+        out.append(dict(type='desk', c=[R3(r['c'][0]), R3(r['c'][1])], w=R3(r['l']), d=R3(r['w']), f=R3(f),
+                        chairs=[[R3(q['c'][0]), R3(q['c'][1]), R3(f + math.pi)] for q in ch]))
+        taken.append(r['poly'])
+    if not any(it['type'] == 'tv' for it in got):
+        for r in sorted(R, key=lambda r: r['w']):
+            if 0.08 <= r['w'] <= 0.42 and 1.0 <= r['l'] <= 2.6 and free(r['poly']):
+                ft, dt = wall_front(r['c'], r['w'], r['l'], r['a'], solid)
+                if dt < 0.5:
+                    out.append(dict(type='tv', c=[R3(r['c'][0]), R3(r['c'][1])], w=R3(r['l']), d=R3(max(r['w'], 0.32)), f=R3(ft)))
+                    break
+    return out
+
+
 def dining(R, solid):
-    chairs = [r for r in R if not r['thick'] and 0.36 <= r['w'] <= 0.58 and r['l'] <= 0.62]
+    # (not the hob or the sink: boxes of that size with curves in them; one box drawn twice, once)
+    chairs = []
+    for r in R:
+        if not r['thick'] and 0.36 <= r['w'] <= 0.58 and r['l'] <= 0.62 and r.get('curves', 0) < 3 \
+                and not any(math.dist(r['c'], o['c']) < 0.1 for o in chairs):
+            chairs.append(r)
     if len(chairs) < 3:
         return None
-    # the biggest group of chairs within reach of each other
+    # the biggest group of chairs within reach of each other (across a table: up to 1.6 m)
     groups = []
     for ch in chairs:
         for g in groups:
-            if any(math.dist(ch['c'], o['c']) < 1.25 for o in g):
+            if any(math.dist(ch['c'], o['c']) < 1.6 for o in g):
                 g.append(ch)
                 break
         else:
@@ -240,23 +463,40 @@ def dining(R, solid):
     return dict(type='dining', c=[R3(cx), R3(cy)], w=R3(min(L, 2.4)), d=R3(min(W, 1.1)), a=R3(a), chairs=chairs_out)
 
 
-def living(R, C, solid):
-    sofas = [c for c in C if 0.68 <= c['w'] <= 1.15 and 1.4 <= c['l'] <= 3.3 and len(c['faces']) >= 2 and (c['fill'] > 0.8 or c['hull'] > 0.9)]
+def living(R, C, solid, room=None):
+    # (cushions make faces; a sofa drawn with rounded corners that do not close has its curves)
+    sofas = [c for c in C if 0.68 <= c['w'] <= 1.15 and 1.4 <= c['l'] <= 3.3
+             and (len(c['faces']) >= 2 or c['curves'] >= 8) and (c['fill'] > 0.8 or c['hull'] > 0.9)]
+    sofas += [c['alt'] for c in C if 'alt' in c and 0.68 <= c['alt']['w'] <= 1.15 and 1.4 <= c['alt']['l'] <= 3.3
+              and (len(c['faces']) >= 2 or c['curves'] >= 8) and c['alt']['fill'] > 0.7]
     if not sofas:
         return None
     s = max(sofas, key=lambda c: c['l'])
     f, dw = wall_front(s['c'], s['w'], s['l'], s['a'], solid)
     if dw > 0.45:
-        return None
+        # a sofa standing free in an open-plan room: its front to the TV, else to the armchairs,
+        # else to the middle of the room
+        tvs = [r for r in R if 0.08 <= r['w'] <= 0.42 and 1.0 <= r['l'] <= 2.6]
+        arms = [r for r in R if 0.62 <= r['w'] <= 0.98 and r['l'] <= 1.0]
+        to = tvs[0]['c'] if tvs else (sum(r['c'][0] for r in arms) / len(arms), sum(r['c'][1] for r in arms) / len(arms)) if arms else \
+            ((room.centroid.x, room.centroid.y) if room is not None else None)
+        if to is None:
+            return None
+        v = (-math.sin(s['a']), math.cos(s['a']))
+        sg = 1 if (to[0] - s['c'][0]) * v[0] + (to[1] - s['c'][1]) * v[1] >= 0 else -1
+        f = math.atan2(v[1] * sg, v[0] * sg)
     out = [sofa_item(s, f)]
     sp = rect_poly(s['c'], s['w'], s['l'], s['a']).buffer(0.05)
-    for r in R:
-        if 0.62 <= r['w'] <= 0.98 and r['l'] <= 1.0 and not sp.contains(Point(*r['c'])):
+    arms = [r for r in R if 0.62 <= r['w'] <= 0.98 and r['l'] <= 1.0]
+    arms += [c for c in C if 0.62 <= c['w'] <= 0.98 and c['l'] <= 1.0 and c['fill'] > 0.8 and (c['faces'] or c['curves'] >= 6)
+             and not any(math.dist(c['c'], r['c']) < 0.2 for r in arms)]
+    for r in arms:
+        if not sp.contains(Point(*r['c'])):
             # an armchair, turned to the sofa
             fa = math.atan2(s['c'][1] - r['c'][1], s['c'][0] - r['c'][0])
             out.append(dict(type='armchair', c=[R3(r['c'][0]), R3(r['c'][1])], w=R3(r['w']), d=R3(r['l']), f=R3(fa)))
-    for r in R:
-        if 0.08 <= r['w'] <= 0.5 and 1.0 <= r['l'] <= 2.6:
+    for r in sorted(R, key=lambda r: r['w']):
+        if 0.08 <= r['w'] <= 0.42 and 1.0 <= r['l'] <= 2.6:
             ft, dt = wall_front(r['c'], r['w'], r['l'], r['a'], solid)
             if dt < 0.5:
                 out.append(dict(type='tv', c=[R3(r['c'][0]), R3(r['c'][1])], w=R3(r['l']), d=R3(max(r['w'], 0.32)), f=R3(ft)))
@@ -282,12 +522,21 @@ def sofa_item(s, f):
     for sg in (-1, 1):
         ac = (sc[0] + u[0] * sg * (l / 2 - arm / 2), sc[1] + u[1] * sg * (l / 2 - arm / 2))
         boxes.append([R3(ac[0]), R3(ac[1]), R3(arm), R3(w - back_d), 0, 0.6, R3(a), 'arm'])
-    return dict(type='sofa', boxes=boxes)
+    return dict(type='sofa', boxes=boxes, f=R3(f))
 
 
 def bedroom(R, C, solid):
-    beds = [c for c in C if 0.8 <= c['w'] <= 2.15 and 1.85 <= c['l'] <= 2.45 and (c['fill'] > 0.88 or (c['hull'] > 0.75 and len(c['faces']) >= 3))]
-    beds += [dict(c=r['c'], w=r['w'], l=r['l'], a=r['a'], faces=[1, 1]) for r in R if 0.8 <= r['w'] <= 2.15 and 1.85 <= r['l'] <= 2.45]
+    # (a single bed is drawn 0.9 x 1.8 m, some doubles 1.8 x 1.8)
+    long_ok = lambda w, l: 1.75 <= l <= 2.45
+    # (not a dining table: a drawing with chairs round it)
+    chairs = [r for r in R if not r['thick'] and 0.36 <= r['w'] <= 0.58 and r['l'] <= 0.62]
+    dining_ = lambda c: sum(1 for r in chairs if rect_poly(c['c'], c['w'], c['l'], c['a']).contains(Point(*r['c']))) >= 2
+    C = [c for c in C if not dining_(c)]
+    beds = [c for c in C if 0.8 <= c['w'] <= 2.15 and long_ok(c['w'], c['l']) and (c['fill'] > 0.88 or (c['hull'] > 0.75 and len(c['faces']) >= 3))]
+    brs = [r for r in R if 0.8 <= r['w'] <= 2.15 and long_ok(r['w'], r['l'])]
+    # (a box round a bed and the floor beside it is not a bed: one with a smaller bed inside goes)
+    brs = [r for r in brs if not any(q is not r and q['w'] * q['l'] < 0.7 * r['w'] * r['l'] and r['poly'].buffer(-0.02).contains(Point(*q['c'])) for q in brs)]
+    beds += [dict(c=r['c'], w=r['w'], l=r['l'], a=r['a'], faces=[1, 1], rect=True) for r in brs]
     # a bed drawn together with a desk, a rug or a wardrobe: grow it from its faces (the mattress,
     # the pillows, the turned-down blanket) while they make one clean bed-sized box
     for c in C:
@@ -313,13 +562,18 @@ def bedroom(R, C, solid):
     if not beds:
         return []
     out, used = [], []
-    bedroom_ok = True
-    for b in sorted(beds, key=lambda b: -b['w'] * b['l']):
+    for b in sorted(beds, key=lambda b: (not b.get('rect'), -b['w'] * b['l'])):
         bp = rect_poly(b['c'], b['w'], b['l'], b['a'])
         if any(bp.intersects(o.buffer(-0.05)) for o in used):
             continue
         used.append(bp)
+        if b['w'] > 0.9 * b['l']:
+            # (a square bed: its head is the end with the pillows)
+            b = pillows_first(b, C)
         f, dw = wall_front(b['c'], b['w'], b['l'], b['a'], solid, along=True)   # head -> foot
+        if b.get('head') is not None:
+            f = b['head']
+            dw = solid.distance(Point(b['c'][0] - math.cos(f) * (b['l'] / 2 + 0.05), b['c'][1] - math.sin(f) * (b['l'] / 2 + 0.05)))
         if dw > 0.35:
             continue   # the head is not against a wall: not read with confidence
         n = (math.cos(f), math.sin(f))
@@ -336,6 +590,31 @@ def bedroom(R, C, solid):
         out.append(dict(type='bed', c=[R3(b['c'][0]), R3(b['c'][1])], w=R3(b['w']), l=R3(b['l']), f=R3(f), stands=stands[:2]))
     # two beds overlapping something else drawn as a bed: leave the room to the viewer
     return out
+
+
+def pillows_first(b, C):
+    """a bed about as wide as long: which of its four ends has the pillows (the small faces of its
+    drawing) - the head; the bed turned so that its long axis runs from there"""
+    comp = min(C, key=lambda c: math.dist(c['c'], b['c']), default=None)
+    if comp is None or math.dist(comp['c'], b['c']) > 0.3:
+        return b
+    small = [f_ for f_ in comp['faces'] if 0.04 <= f_.area <= 0.45]
+    if not small:
+        return b
+    best = None
+    for k in range(4):
+        a = b['a'] + k * math.pi / 2
+        u = (math.cos(a), math.sin(a))
+        half = (b['l'] if k % 2 == 0 else b['w']) / 2
+        end = (b['c'][0] - u[0] * half, b['c'][1] - u[1] * half)   # the head end, the foot along +u
+        n = sum(1 for f_ in small if f_.centroid.distance(Point(*end)) < 0.55)
+        if best is None or n > best[0]:
+            best = (n, a, k)
+    n, a, k = best
+    if n == 0:
+        return b
+    w, l = (b['w'], b['l']) if k % 2 == 0 else (b['l'], b['w'])
+    return dict(b, a=a, w=w, l=l, head=a)
 
 
 def bathroom(R, C, solid):

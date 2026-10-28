@@ -2,6 +2,7 @@
 
     tools/ab/py tools/rp/extract.py [PLAN ...]        # all plans, or e.g. A_typ V_25
     tools/ab/py tools/rp/extract.py --check            # + overlay pictures build/rp/plans/*.png
+    tools/ab/py tools/rp/extract.py --furniture        # the furniture read again, the plans kept
 
 How the sheets are drawn (vector, colours exact):
   brown strokes        partitions                     magenta / red outlines   concrete walls, pylons
@@ -14,7 +15,9 @@ in the flat's colour.
 
 Method: the sheet is rendered at 600 dpi (8 px per 10 cm); the wall colours make a barrier; the room
 labels seed a watershed over the free floor (cost: closeness to the walls), so the rooms meet in the
-narrowest place between them - the doorways. Each room is then opened by 30 cm (the doorway
+narrowest place between them - the doorways; and a label floods only its own fill colour (a
+balcony's lavender, the flat's colour), so no room runs through a doorway into a room of another
+colour. Each room is then opened by 30 cm (the doorway
 stubs go), traced and squared up. Walls are the barrier itself; windows the bright blue glass, taken
 across the whole wall; door swings from the leaves (which side the door opens to). Rooms of one
 colour that reach one another through doorways are one flat, matched to the flat box of the colour.
@@ -217,7 +220,15 @@ def trace(mask, R, eps_m=0.025):
     if not cs:
         return None
     c = max(cs, key=cv2.contourArea)
-    c = cv2.approxPolyDP(c, eps_m * R.ppm, True)[:, 0, :].astype(float)
+    # (simplified keeping its topology: cv2.approxPolyDP could cross the outline over itself at a
+    # narrow place - a kitchen niche, a strip of worktop - and the repair then dropped that part)
+    if len(c) < 3:
+        return None
+    g = Polygon(c[:, 0, :].astype(float)).buffer(0)
+    if g.is_empty:
+        return None
+    g = max(getattr(g, 'geoms', [g]), key=lambda q: q.area).simplify(eps_m * R.ppm, preserve_topology=True)
+    c = np.array(g.exterior.coords[:-1], float)
     if len(c) < 3:
         return None
     pts = square(square(c), chamfer=0.3 * R.ppm)
@@ -227,6 +238,11 @@ def trace(mask, R, eps_m=0.025):
         return None
     if p.geom_type != 'Polygon':
         p = max(p.geoms, key=lambda g: g.area)
+    # (slits a few millimetres wide from a wall into the room - a stroke of wall colour in a
+    # drawing - closed; square corners stay square)
+    q = p.buffer(0.03, join_style=2).buffer(-0.03, join_style=2)
+    if q.geom_type == 'Polygon' and not q.is_empty:
+        p = q
     p = p.simplify(0.004)
     q = list(p.exterior.coords)[:-1]
     if not Polygon(q).exterior.is_ccw:
@@ -381,7 +397,7 @@ def extract(key, debug=False):
         markers[sub] = i
     dist = cv2.distanceTransform(free.astype(np.uint8), cv2.DIST_L2, 5)
     cost = dist.max() - dist
-    ws = watershed(cost, markers, mask=free)
+    ws = colour_watershed(R, cost, markers, free, rooms_txt)
 
     # ---- rooms
     k_open = disk(max(1, int(0.15 * ppm)))
@@ -403,6 +419,23 @@ def extract(key, debug=False):
         poly = trace(m, R)
         if not poly:
             continue
+        # (the opening can cut a room in two at a narrow place - a strip of worktop along a wall
+        # behind its front line, a niche: big parts close to the room's main part are joined back)
+        parts = [Polygon(poly)]
+        for c in cs2:
+            if c[0] == best[0] or c[1][cv2.CC_STAT_AREA] < 0.4 * ppm * ppm:
+                continue
+            q = trace(lab2 == c[0], R)
+            if q and Polygon(q).distance(parts[0]) < 0.35:
+                parts.append(Polygon(q))
+                m = m | (lab2 == c[0])
+        if len(parts) > 1:
+            g = unary_union(parts).buffer(0.18, join_style=2).buffer(-0.18, join_style=2)
+            if g.geom_type == 'Polygon':
+                ring = list(g.simplify(0.004).exterior.coords)[:-1]
+                if not Polygon(ring).exterior.is_ccw:
+                    ring = ring[::-1]
+                poly = [[round(x, 3), round(y, 3)] for x, y in ring]
         area = Polygon(poly).area
         room_mask[m] = i
         sx, sy = R.plan(*t['px'])
@@ -479,6 +512,94 @@ def extract(key, debug=False):
     if debug:
         draw_debug(key, plan, R, ws)
     return plan
+
+
+def seed_colour(R, px, r):
+    """the fill round a label (the most common pastel colour within r px; text, lines and white
+    left out), or None in a white room (where the commonest colour is only the edges of the red
+    figures or of the axis lines: under a quarter of the pixels)"""
+    cx, cy = int(px[0]), int(px[1])
+    sub = R.img[max(0, cy - r):cy + r, max(0, cx - r):cx + r].reshape(-1, 3)
+    n = len(sub)
+    sub = sub[(sub.min(axis=1) >= 90) & (sub.max(axis=1) >= 200) & (sub.min(axis=1) < 246)]
+    if len(sub) < 30:
+        return None
+    q = (sub // 4).astype(np.int32)
+    keyv = q[:, 0] * 10000 + q[:, 1] * 100 + q[:, 2]
+    vals, cnt = np.unique(keyv, return_counts=True)
+    if cnt.max() < 0.25 * n:
+        return None
+    v = vals[np.argmax(cnt)]
+    return (int(v // 10000) * 4 + 2, int(v // 100 % 100) * 4 + 2, int(v % 100) * 4 + 2)
+
+
+def colour_watershed(R, cost, markers, free, rooms_txt, tol=8):
+    """The watershed, kept to each room's fill colour: the sheets fill every flat in its own colour
+    and the balconies in lavender, so a label floods only the pixels of its own colour (and the
+    lines, text and white openings, which any room may take). Without this a balcony's label ran
+    through the balcony door into the kitchen, a bathroom's into the hall.
+    Each colour is flooded on its own, from its own labels; then the colour pixels each run took
+    are the markers of one last watershed that shares out the rest (lines, text, white)."""
+    H, W = cost.shape
+    cols, seed_cls = [], {}
+    for i, t in enumerate(rooms_txt, 1):
+        c = seed_colour(R, t['px'], int(0.35 * R.ppm))
+        if c is None:
+            continue
+        k = next((k for k, q in enumerate(cols) if max(abs(a - b) for a, b in zip(c, q)) <= 6), None)
+        if k is None:
+            k = len(cols)
+            cols.append(c)
+        seed_cls[i] = k
+    best = np.full((H, W), 255, np.uint8)
+    cls = np.full((H, W), -1, np.int16)
+    for k, c in enumerate(cols):
+        d = cv2.absdiff(R.img, np.full_like(R.img, c)).max(axis=2)
+        upd = d < best
+        best[upd] = d[upd]
+        cls[upd] = k
+    cls[best > tol] = -1
+    # (a fill is an area: the thin runs of a colour, the edges of text and lines, are not)
+    k_fill = disk(max(2, int(0.05 * R.ppm)))
+    for k in range(len(cols)):
+        m = cls == k
+        cls[m & ~cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_OPEN, k_fill).astype(bool)] = -1
+    # (the colour runs at a third of the resolution - 2.5 cm a pixel - for speed: they only place
+    # the markers; the walls are kept whole by taking a block as free only when all of it is)
+    f = 3
+    Hs, Ws = H // f, W // f
+    cls_s = cls[1:Hs * f:f, 1:Ws * f:f]
+    free_s = cv2.erode(free.astype(np.uint8), np.ones((f, f), np.uint8))[1:Hs * f:f, 1:Ws * f:f].astype(bool)
+    cost_s = cost[1:Hs * f:f, 1:Ws * f:f]
+    mk_s = cv2.dilate(markers.astype(np.float32), np.ones((f, f), np.uint8))[1:Hs * f:f, 1:Ws * f:f].astype(np.int32)
+    mk_s[~free_s] = 0
+    M_s = np.zeros((Hs, Ws), np.int32)
+    pad = int(1.0 * R.ppm / f)
+    for k in range(len(cols)):
+        ids = [i for i, kk in seed_cls.items() if kk == k]
+        mine = cls_s == k
+        ys, xs = np.nonzero(mine)
+        if not ids or not len(xs):
+            continue
+        y0, y1 = max(0, ys.min() - pad), min(Hs, ys.max() + pad + 1)
+        x0, x1 = max(0, xs.min() - pad), min(Ws, xs.max() + pad + 1)
+        mk = mk_s[y0:y1, x0:x1]
+        mk = np.where(np.isin(mk, ids), mk, 0)
+        allowed = free_s[y0:y1, x0:x1] & (mine[y0:y1, x0:x1] | (cls_s[y0:y1, x0:x1] == -1))
+        wk = watershed(cost_s[y0:y1, x0:x1], mk, mask=allowed)
+        take = mine[y0:y1, x0:x1] & (wk > 0)
+        M_s[y0:y1, x0:x1][take] = wk[take]
+    # back to full size: a label's marker only on the pixels of its own colour
+    M = np.zeros((H, W), np.int32)
+    M[:Hs * f, :Ws * f] = np.kron(M_s, np.ones((f, f), np.int32))
+    lut = np.full(int(markers.max()) + 1, -2, np.int16)
+    for i, k in seed_cls.items():
+        lut[i] = k
+    M[(M > 0) & (cls != lut[M])] = 0
+    M[~free] = 0
+    # every label keeps its own seed (a white room's too)
+    M[markers > 0] = markers[markers > 0]
+    return watershed(cost, M, mask=free)
 
 
 def fill_colour(R, m):
@@ -1048,8 +1169,16 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     debug = '--check' in sys.argv
     keys = args or list(PLANS)
-    plans = json.load(open(OUT)) if os.path.exists(OUT) and args else {}
+    only_furniture = '--furniture' in sys.argv   # the plans as they are, the furniture read again
+    plans = json.load(open(OUT)) if os.path.exists(OUT) and (args or only_furniture) else {}
     for key in keys:
+        if only_furniture:
+            import furniture as FU
+            sheet, block, _ = PLANS[key]
+            pg = SH.doc()[SH.PAGES[sheet]]
+            fr, _ = SH.fit(pg, block)
+            FU.read(pg, fr, plans[key], Raster(pg, fr, CLIP[block]).rect)
+            continue
         p = extract(key, debug)
         report(key, p)
         plans[key] = p
