@@ -1,0 +1,18 @@
+node_modules
+dist
+publish
+.claude
+.DS_Store
+build
+__pycache__
+
+# downloaded sources (blender/assets/fetch_assets.py); the site ships the derived files in public/
+blender/assets/models/
+blender/assets/textures/
+blender/assets/hdri/
+.pylib/
+.pylib-blender/
+build/
+blender/assets/people/
+
+.claude/

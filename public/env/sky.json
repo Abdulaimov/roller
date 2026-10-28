@@ -1,0 +1,16 @@
+{
+ "file": "kloofendal_48d_partly_cloudy_puresky",
+ "source": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+ "licence": "CC0",
+ "sun_dir": [
+  0.55434,
+  0.74174,
+  0.37753
+ ],
+ "sun_elevation_deg": 47.88,
+ "sun_uv": [
+  0.59516,
+  0.234
+ ],
+ "sun_to_sky": 18489.7
+}

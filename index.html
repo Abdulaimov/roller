@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Regnum Plaza — 3D</title>
+    <meta name="description" content="Жилой комплекс Regnum Plaza в Душанбе в 3D: выберите блок и этаж, откройте квартиру с планировкой и прогуляйтесь по ней." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232b2a29'/%3E%3Ctext x='16' y='22' font-size='15' font-family='system-ui' font-weight='800' fill='%23d8a66b' text-anchor='middle'%3EАБ%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="places"></div>
+    <div id="labels"></div>
+
+    <div id="ext-ui">
+      <header class="brand panel">
+        <div class="logo">АБ</div>
+        <div class="brand-text">
+          <div class="brand-name" data-t="brand"></div>
+          <div class="brand-sub" data-t="brandSub"></div>
+        </div>
+        <div class="lang" role="group" aria-label="Язык / Забон">
+          <button data-lang="ru">RU</button><button data-lang="tj">TJ</button>
+        </div>
+      </header>
+
+      <nav id="floors" class="panel"></nav>
+      <aside id="side" class="panel"></aside>
+      <div id="hint"></div>
+    </div>
+
+    <div id="loading" class="panel"><span data-t="loading"></span> <b>0%</b></div>
+    <div id="nogl" hidden>
+      <div class="panel">
+        <b data-t="noglTitle"></b>
+        <p class="why" data-t="noglWhy"></p>
+        <p data-t="noglHelp"></p>
+      </div>
+    </div>
+    <button id="quality" class="btn small" type="button"></button>
+    <div id="daytime" class="panel" data-phase="day" hidden>
+      <svg class="dt-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" /></svg>
+      <svg class="dt-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1z" /></svg>
+      <input id="daytime-range" type="range" />
+      <b id="daytime-clock"></b>
+    </div>
+    <button id="eye" class="panel" type="button" aria-pressed="false">
+      <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+      <svg class="eye-shut" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 8.5C5.6 11 8.6 12.6 12 12.6s6.4-1.6 8.5-4.1M6.6 11.4 5 14M10 12.5l-.6 3M14 12.5l.6 3M17.4 11.4 19 14" /></svg>
+    </button>
+    <div id="tooltip"></div>
+
+    <div id="walk-ui" hidden>
+      <div class="walk-top">
+        <div id="walk-title" class="panel chip-lg"></div>
+        <button id="exit-walk" class="btn" data-t="exitWalk"></button>
+      </div>
+      <div id="walk-help" class="panel"></div>
+      <div id="minimap" class="panel"><canvas></canvas></div>
+      <div id="joystick"><div class="knob"></div></div>
+    </div>
+
+    <div id="plan-big" hidden>
+      <div class="panel">
+        <div class="head"><b></b><button class="btn small" data-act="close"></button></div>
+        <canvas></canvas>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="fade"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

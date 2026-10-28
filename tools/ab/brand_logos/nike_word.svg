@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="1000"
+   height="416.267"
+   viewBox="0 0 1000 416.267"
+   id="svg2"
+   version="1.1"
+   inkscape:version="0.91 r13725"
+   sodipodi:docname="Nike_Wordmark.svg">
+  <defs
+     id="defs4" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.35"
+     inkscape:cx="794.94715"
+     inkscape:cy="363.03399"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     units="px"
+     inkscape:window-width="1366"
+     inkscape:window-height="705"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-636.09514)">
+    <path
+       d="m 261.1136,1052.3621 -105.96054,0 12.04591,-184.16797 -68.807783,184.16797 -98.391187,0 156.11382,-416.26707 104.69763,0 -12.08838,186.68913 70.11317,-186.68913 98.39023,0 -156.11287,416.26707"
+       style="fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       id="path16"
+       inkscape:connector-curvature="0" />
+    <path
+       d="m 273.88892,1052.3621 156.11523,-416.26707 98.39026,0 -156.11523,416.26707 -98.39026,0"
+       style="fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       id="path18"
+       inkscape:connector-curvature="0" />
+    <path
+       d="M 656.4214,1024.6114 650.11636,807.64827 798.87847,644.31684 Z M 973.5618,705.4717 1000,636.09503 l -300.21523,0 -103.09483,124.88037 47.59114,-124.88037 -99.6508,0 -154.85232,416.26707 98.39024,0 66.10966,-174.07661 4.52992,174.07661 301.89831,-0.6538 28.73973,-80.07707 -114.78901,0 37.71222,-100.91368 94.60627,0 29.10564,-77.57724 -94.60629,0 32.43403,-87.66861 99.65312,0"
+       style="fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       id="path28"
+       inkscape:connector-curvature="0" />
+  </g>
+</svg>

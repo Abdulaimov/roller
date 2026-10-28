@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Python 3.13 (Blender's) with the project libraries in .pylib (shapely, pymupdf, opencv, scipy)
+DIR=$(cd "$(dirname "$0")/../.." && pwd)
+PYTHONPATH="$DIR/.pylib" exec /Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 "$@"
