@@ -88,13 +88,12 @@ def facade_floor(mb, block, plan, h, top=False):
     glass_face = GLASS_FACE.get(key, lambda x, y: False)
     wall_mat = WALL[key]
     # walls and concrete as drawn (the inner ones show through the windows); the back walls of the
-    # balconies in warm wood
+    # balconies light, as on the renders (warm wood there read as red from afar)
     for w in plan['walls'] + plan['struct']:
         g = P(w)
         if g.area < 0.01:
             continue
-        mat = 'Lattice wood' if not outdoor.is_empty and g.distance(outdoor) < 0.06 and g.distance(outside) > 0.3 else wall_mat
-        mb.prism(g, 0.0, h, mat, mat)
+        mb.prism(g, 0.0, h, wall_mat, wall_mat)
     # windows: dark glass in black frames, wall below and above
     for wq in plan['windows']:
         g = P(wq)
@@ -184,17 +183,10 @@ def crown(mb, block, plan, zr):
         q = q.simplify(0.3)
         mb.prism_chamfer(q, zr + 0.15, zr + 3.6, 'Stone white', None, None, c=0.02)
         mb.prism(q.buffer(0.25, join_style='mitre'), zr + 3.6, zr + 3.9, 'White band', 'Roof', 'White band')
-    # solar panels on the free roof, planters with small trees along the edge
+    # solar panels on the free roof (the renders' roofs: plant rooms and panels, no trees - the
+    # small trees along the edge read as trees standing in the sky)
     free = roof.buffer(-2.2).difference(core.buffer(1.2))
     solar_field(mb, free, zr + 0.15, angle=0)
-    edge = enc.buffer(-1.4, join_style='mitre').exterior
-    n = max(4, int(edge.length / 14))
-    for k in range(n):
-        p = edge.interpolate((k + 0.5) * edge.length / n)
-        if core.buffer(1.0).contains(p):
-            continue
-        mb.box(p.x, p.y, zr + 0.15, 1.2, 1.2, 0.55, 'Planter')
-        log_tree(mb, p.x, p.y, zr + 0.7, 3.2, 1.1, 'small')
 
 
 def frame(b):

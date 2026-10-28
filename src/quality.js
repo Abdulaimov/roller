@@ -1,8 +1,10 @@
 // Graphics level: 'high' on computers, 'low' on phones and small tablets (or ?quality=low|high,
 // or the switch in the corner, remembered per browser).
-//   high  1k textures, 8192 shadow map, ambient occlusion pass (full resolution), the ground's baked
-//         occlusion, glass reflecting its surroundings, bloom and a grade, pixel ratio up to 2
-//   low   512 px textures, 2048 shadow map, no post-processing, pixel ratio up to 1.5
+//   high  1k textures, 4096 shadow map, ambient occlusion pass, the ground's baked occlusion, glass
+//         reflecting its surroundings, bloom and a grade, pixel ratio up to 1.5
+//   low   512 px textures, 2048 shadow map, no post-processing, pixel ratio up to 1.25
+// The pixel ratio then follows the frame rate (src/main.js): a Retina screen at full size was
+// rendered at four times the pixels and stuttered.
 const KEY = 'regnum.quality';
 
 function detect() {
@@ -26,8 +28,9 @@ const high = QUALITY === 'high';
 export const Q = {
   level: QUALITY,
   textureSize: high ? '1k' : '512',
-  pixelRatio: Math.min(devicePixelRatio || 1, high ? 2 : 1.5),
-  shadowMap: high ? 8192 : 2048,
+  // (the start; src/main.js lowers it while the frame rate stays under 42 and raises it back)
+  pixelRatio: Math.min(devicePixelRatio || 1, high ? 1.5 : 1.25),
+  shadowMap: high ? 4096 : 2048,
   ao: high,
   antialias: true,
 };

@@ -1258,9 +1258,29 @@ addEventListener('resize', () => {
 const clock = new THREE.Clock();
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 renderer.info.autoReset = false;
+// the resolution follows the frame rate: under 42 frames a second it steps down (to 0.75 of a CSS
+// pixel at the least), over 57 it steps back up to the quality's own
+const fpsGov = { t: 0, n: 0, wait: 2 };
+const govern = (raw) => {
+  fpsGov.t += raw;
+  fpsGov.n++;
+  if (fpsGov.t < 1.5) return;
+  const fps = fpsGov.n / fpsGov.t;
+  fpsGov.t = fpsGov.n = 0;
+  if (fpsGov.wait > 0 || document.hidden) return void fpsGov.wait--;
+  const pr = renderer.getPixelRatio();
+  const next = fps < 42 ? Math.max(0.75, pr - 0.25) : fps > 57 ? Math.min(Q.pixelRatio, pr + 0.25) : pr;
+  if (next !== pr) {
+    renderer.setPixelRatio(next);
+    pipeline.setSize(innerWidth, innerHeight);
+    fpsGov.wait = 1;
+  }
+};
 renderer.setAnimationLoop(() => {
   renderer.info.reset();
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const raw = clock.getDelta();
+  govern(raw);
+  const dt = Math.min(raw, 0.05);
   if (tween) {
     tween.t += dt;
     const k = ease(Math.min(1, tween.t / tween.dur));
