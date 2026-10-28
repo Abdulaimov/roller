@@ -17,7 +17,7 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 page.on('pageerror', (e) => console.log('pageerror:', e.message));
-await page.goto('http://localhost:5191/?still');
+await page.goto('http://localhost:5197/?still');
 await page.waitForFunction(() => window.__app?.building, null, { timeout: 120000 });
 await page.waitForTimeout(1200);
 for (const id of ids) {

@@ -15,7 +15,7 @@ for (const lang of ['ru', 'tj']) {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 }, deviceScaleFactor: 2 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`http://localhost:5191/?still&lang=${lang}`);
+  await page.goto(`http://localhost:5197/?still&lang=${lang}`);
   await page.waitForFunction(() => window.__app?.building, null, { timeout: 120000 });
   const res = await page.evaluate(async () => {
     const { drawPlan } = await import('/src/plan.js');

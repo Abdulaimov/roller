@@ -89,9 +89,9 @@ THREE.DefaultLoadingManager.onProgress = shadowsDirty;
 
 const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 1, 30000);
 // Start view: the whole complex from the south-west, over the street, the mountains behind it.
-const HOME_WIDE = { pos: new THREE.Vector3(165, 105, 140), target: new THREE.Vector3(-24, 30, 6) };
+const HOME_WIDE = { pos: new THREE.Vector3(165, 105, 140), target: new THREE.Vector3(-18, 30, 2) };
 // portrait: the panel covers the lower half, so the camera aims below the complex (it shows higher up)
-const HOME_TALL = { pos: new THREE.Vector3(250, 165, 215), target: new THREE.Vector3(-24, 22, 6) };
+const HOME_TALL = { pos: new THREE.Vector3(-262, 225, 338), target: new THREE.Vector3(-16, 12, -6) };
 const home = () => (innerWidth < innerHeight ? HOME_TALL : HOME_WIDE);
 camera.position.copy(home().pos);
 
@@ -560,7 +560,7 @@ function roomFilter(list) {
   const T = L();
   const rooms = [...new Set(list.map((a) => Math.min(a.rooms, 4)))].sort();
   return `<div class="label">${T.rooms}</div><div class="seg" data-filter="rooms">
-    ${[0, ...rooms].map((r) => `<button data-v="${r}" class="${state.filter.rooms === r ? 'on' : ''}">${r ? T.roomsShort(r) : T.all}</button>`).join('')}
+    ${[0, ...rooms].map((r) => `<button data-v="${r}" class="${state.filter.rooms === r ? 'on' : ''}">${r ? (r === 4 && list.some((a) => a.rooms > 4) ? T.roomsShort(4).replace('4-', '4+ ') : T.roomsShort(r)) : T.all}</button>`).join('')}
   </div>`;
 }
 

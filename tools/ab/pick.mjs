@@ -8,7 +8,7 @@ const browser = await chromium.launch({
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
-await page.goto('http://localhost:5191/?still');
+await page.goto('http://localhost:5197/?still');
 await page.waitForFunction(() => window.__app?.building, null, { timeout: 120000 });
 await page.waitForTimeout(1200);
 const r = await page.evaluate(async ([id, view, pix]) => {

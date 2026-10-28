@@ -21,7 +21,7 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
-await page.goto(`http://localhost:5191/?still&quality=high&clouds=8k&signs=${opt('--signs', 'brands')}`);
+await page.goto(`http://localhost:5197/?still&quality=high&clouds=8k&signs=${opt('--signs', 'brands')}`);
 await page.waitForFunction(() => window.__app?.building && window.__app.daytime && window.__app.scene.getObjectByName('signs') && window.__app.hqDone, null, { timeout: 240000 });
 await page.waitForTimeout(4000);
 await page.evaluate(() => {

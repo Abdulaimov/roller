@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core';
 const [tower, floor, unit, out, mode] = process.argv.slice(2);
 const browser = await chromium.launch({ executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`, headless: true, args: ['--use-angle=metal'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-await page.goto('http://localhost:5191/');
+await page.goto('http://localhost:5197/');
 await page.waitForFunction(() => window.__app?.building, null, { timeout: 120000 });
 await page.waitForTimeout(2500);
 const id = `${tower}${floor}-${unit}`;

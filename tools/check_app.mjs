@@ -2,13 +2,13 @@
 // floors and apartments can be selected (by API and by clicking the model), the walk-through
 // starts and ends, walls between apartments stop the visitor and doorways let them through.
 //
-//   node tools/check_app.mjs [--url http://localhost:5191/] [--quality low]
+//   node tools/check_app.mjs [--url http://localhost:5197/] [--quality low]
 import { chromium } from 'playwright-core';
 import { HOME } from './views.mjs';
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.includes(`--${k}`) ? args[args.indexOf(`--${k}`) + 1] : d);
-const url = opt('url', 'http://localhost:5191/');
+const url = opt('url', 'http://localhost:5197/');
 const quality = opt('quality', '');
 const browser = await chromium.launch({
   executablePath: process.env.CHROME ?? `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,

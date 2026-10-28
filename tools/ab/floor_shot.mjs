@@ -16,7 +16,7 @@ const page = await browser.newPage({ viewport: { width: +(opt('--w', 1400)), hei
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-await page.goto('http://localhost:5191/?still');
+await page.goto('http://localhost:5197/?still');
 await page.waitForFunction(() => window.__app?.building, null, { timeout: 120000 });
 await page.waitForTimeout(1500);
 const res = await page.evaluate(async ([tower, floor, at, span, tilt, yaw, ui]) => {

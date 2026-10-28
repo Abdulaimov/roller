@@ -3,14 +3,14 @@
 // surface, and the result is saved as raw float32 (x, y, z, 1 where a building was hit) per pixel.
 // With it a render can be unwrapped onto the model's facades (tools/ab/unwrap.py).
 //
-//   node tools/ab/posmap.mjs VIEW OUT.f32 [--url http://localhost:5191/]
+//   node tools/ab/posmap.mjs VIEW OUT.f32 [--url http://localhost:5197/]
 import { chromium } from 'playwright-core';
 import { writeFileSync } from 'node:fs';
 import { VIEWS } from '../views.mjs';
 
 const [name, out] = process.argv.slice(2);
 const args = process.argv.slice(2);
-const url = args.includes('--url') ? args[args.indexOf('--url') + 1] : 'http://localhost:5191/';
+const url = args.includes('--url') ? args[args.indexOf('--url') + 1] : 'http://localhost:5197/';
 const v = VIEWS[name];
 if (!v?.cam) throw new Error(`view ${name} has no render camera`);
 const [W, H] = v.cam.size;

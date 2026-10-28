@@ -11,7 +11,7 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: +opt('--w', 1280), height: +opt('--h', 720) } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
-await page.goto('http://localhost:5191/?still');
+await page.goto('http://localhost:5197/?still');
 await page.waitForFunction(() => window.__app?.building, null, { timeout: 120000 });
 await page.waitForTimeout(1000);
 await page.evaluate(([t, f]) => window.__app.selectFloor(t, +f), [tower, floor]);

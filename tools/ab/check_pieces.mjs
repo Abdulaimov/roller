@@ -10,7 +10,7 @@ const browser = await chromium.launch({
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 800, height: 500 } });
-await page.goto('http://localhost:5191/?still');
+await page.goto('http://localhost:5197/?still');
 await page.waitForFunction(() => window.__app?.building, null, { timeout: 120000 });
 const out = await page.evaluate(async (ids) => {
   const { buildFloor } = await import('/src/floor.js');

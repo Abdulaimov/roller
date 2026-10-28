@@ -166,6 +166,10 @@ def crown(mb, block, plan, zr):
         mb.box(p.x, p.y, zr + 1.35, 0.35, 0.35, 2.6, 'Stone white')
     top_ring = enc.buffer(0.45, join_style='mitre').difference(enc.buffer(0.12, join_style='mitre'))
     mb.prism_chamfer(top_ring, zr + 3.95, zr + 4.35, 'White band', 'White band', 'White band', c=0.03)
+    # the light lines of the night renders: round the crown band and the frame's top rail
+    for zz in (zr + 1.36, zr + 3.92):
+        line_ring = enc.buffer(0.57 if zz < zr + 2 else 0.47, join_style='mitre').difference(enc.buffer(0.5 if zz < zr + 2 else 0.4, join_style='mitre'))
+        mb.prism(line_ring, zz, zz + 0.05, 'Night line', 'Night line', 'Night line')
     # railing on the parapet
     pts = list(enc.buffer(-0.12, join_style='mitre').exterior.coords)
     mb.tube(pts, [zr + 1.15] * len(pts), [zr + 2.2] * len(pts), 0.04, 'Frame dark', closed=True)

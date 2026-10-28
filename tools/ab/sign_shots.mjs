@@ -26,7 +26,7 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 page.on('pageerror', (e) => console.log('pageerror:', e.message));
 page.on('console', (m) => m.type() === 'warning' && /sign/.test(m.text()) && console.log(m.text()));
-await page.goto('http://localhost:5191/?still');
+await page.goto('http://localhost:5197/?still');
 await page.waitForFunction(() => window.__app?.building && window.__app.scene.getObjectByName('signs'), null, { timeout: 180000 });
 await page.waitForTimeout(2000);
 for (const name of names.length ? names : Object.keys(VIEWS)) {

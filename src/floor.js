@@ -2129,7 +2129,9 @@ function furnish(ctx) {
     }
     case 'kitchen': {
       // the run along a wall (under a window too: the sink goes there), 1.5 to 4.4 m long
-      const run = fitAlong(ctx, sides, { minW: 1.2, maxW: 4.4, depth: 0.64, clear: 0.9, stretches: 'low' }, (len, s, t) => F.kitchen(k, M, len, H, windowSpans(s, t, len)));
+      const run = fitAlong(ctx, sides, { minW: 1.2, maxW: 4.4, depth: 0.64, clear: 0.9, stretches: 'low' }, (len, s, t) => F.kitchen(k, M, len, H, windowSpans(s, t, len)))
+        // (a narrow kitchen: a shorter run with less room in front)
+        ?? fitAlong(ctx, sides, { minW: 1.0, maxW: 3.0, depth: 0.6, clear: 0.7, stretches: 'low' }, (len, s, t) => F.kitchen(k, M, len, H, windowSpans(s, t, len)));
       let runSide = null;
       if (!run) ctx.notes.push(`kitchen ${room.area} m²: no wall for the kitchen run`);
       if (run) {
@@ -2265,9 +2267,20 @@ function downlights(ctx) {
 }
 
 function bathroom(ctx) {
-  const { room, k, M } = ctx;
+  const { room, k, M, H, apt } = ctx;
   const r = innerRect(room.poly, 0.06);
   const sides = rectSides(room, r, ctx.solid);
+  // sanitary ware where the drawing gives none (Regnum Plaza's sheets draw it in thin black lines
+  // that are not read yet): a bath along the longest wall if the room takes one, a basin, a WC
+  const drawn = (apt?.data.furniture ?? []).some((it) => ['toilet', 'bath', 'basin'].includes(it.type) && it.c && inside(room.poly, ...it.c));
+  if (!drawn) {
+    const bw = r.x1 - r.x0, bd = r.y1 - r.y0;
+    if (Math.max(bw, bd) >= 1.65 && Math.min(bw, bd) >= 1.45 && room.area >= 3.2) {
+      fitAlong(ctx, sides, { minW: 1.6, maxW: 1.7, depth: 0.72, clear: 0 }, (w) => F.bathtub(k, M, w, 0.72, 1));
+    }
+    fitAlong(ctx, sides, { minW: 0.55, maxW: 0.8, depth: 0.48, clear: 0.55 }, (w) => F.vanity(k, M, w, H, 1, 0.48));
+    fitAlong(ctx, sides, { minW: 0.5, maxW: 0.5, depth: 0.68, clear: 0.5 }, () => F.toilet(k, M, 0.5, 0.68, H));
+  }
   // towel rail on a free wall, a bath mat
   const spot = bestWall(sides, 0.7);
   if (spot) place(ctx, spot.s, (spot.f.t0 + spot.f.t1) / 2, 0.6, 0.12, () => F.towelRail(k, M), { collide: false });

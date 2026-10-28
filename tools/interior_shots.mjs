@@ -1,14 +1,14 @@
 // Screenshots inside one flat: one from a corner of each furnished room, looking across it.
 //
 //   npx vite --port 5173 &
-//   node tools/interior_shots.mjs build/interior [--apt V12-7] [--url http://localhost:5191/] [--size 1600x1000]
+//   node tools/interior_shots.mjs build/interior [--apt V12-7] [--url http://localhost:5197/] [--size 1600x1000]
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const out = args.find((a) => !a.startsWith('--') && !args[args.indexOf(a) - 1]?.startsWith('--')) ?? 'build/interior';
 const opt = (k, d) => (args.includes(`--${k}`) ? args[args.indexOf(`--${k}`) + 1] : d);
-const url = opt('url', 'http://localhost:5191/');
+const url = opt('url', 'http://localhost:5197/');
 const aptIds = opt('apt', 'V12-7').split(',');
 const [W, H] = opt('size', '1600x1000').split('x').map(Number);
 const query = opt('query', '');

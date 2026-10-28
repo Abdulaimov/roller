@@ -17,7 +17,7 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage({ viewport: { width: 800, height: 500 } });
 page.on('pageerror', (e) => console.log('pageerror:', e.message));
-await page.goto('http://localhost:5191/?still');
+await page.goto('http://localhost:5197/?still');
 await page.waitForFunction(() => window.__app?.building, null, { timeout: 120000 });
 const res = await page.evaluate(async ({ ids, keep }) => {
   const { buildFloor } = await import('/src/floor.js');

@@ -32,7 +32,7 @@ const page = await browser.newPage({ viewport: { width: W, height: H }, deviceSc
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-await page.goto(`http://localhost:5191/?still&quality=high&clouds=8k&signs=${signs}`); // the sharpest clouds
+await page.goto(`http://localhost:5197/?still&quality=high&clouds=8k&signs=${signs}`); // the sharpest clouds
 // everything in: the model, the hour, the signs, the high quality (grass, reflections, the ground's shade)
 await page.waitForFunction(() => window.__app?.building && window.__app.daytime && window.__app.scene.getObjectByName('signs') && window.__app.hqDone, null, { timeout: 240000 });
 await page.waitForTimeout(4000);

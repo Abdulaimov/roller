@@ -1,7 +1,7 @@
 // Screenshots from fixed cameras (tools/views.mjs).
 //
 //   npx vite --port 5173 &            (or any running copy of the site)
-//   node tools/shots.mjs build/shots [--url http://localhost:5191/] [--only aerial,garden] [--size 1600x1000]
+//   node tools/shots.mjs build/shots [--url http://localhost:5197/] [--only aerial,garden] [--size 1600x1000]
 //
 // Uses the installed Google Chrome (playwright-core drives it; nothing else is downloaded).
 import { chromium } from 'playwright-core';
@@ -11,7 +11,7 @@ import { HOME, VIEWS } from './views.mjs';
 const args = process.argv.slice(2);
 const out = args.find((a) => !a.startsWith('--') && !args[args.indexOf(a) - 1]?.startsWith('--')) ?? 'build/shots';
 const opt = (k, d) => (args.includes(`--${k}`) ? args[args.indexOf(`--${k}`) + 1] : d);
-const url = opt('url', 'http://localhost:5191/');
+const url = opt('url', 'http://localhost:5197/');
 const only = opt('only', '')?.split(',').filter(Boolean);
 const [W, H] = opt('size', '1600x1000').split('x').map(Number);
 const query = opt('query', '');
