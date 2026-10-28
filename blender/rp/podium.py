@@ -28,7 +28,6 @@ def outline(fr):
 
 
 def build(mats, col, fr, towers_fp):
-    rnd = random.Random(7)
     O = outline(fr)
     mb = MeshBuilder()
     inner = O.buffer(-4.2, join_style='mitre')
@@ -53,21 +52,25 @@ def build(mats, col, fr, towers_fp):
         rot = math.atan2(u[1], u[0])
         k = max(1, round(L / BAY))
         step = L / k
+        # piers: dark stone; every third one (and the corners) broad and clad in wood boards
+        # (render 6: wood-clad pillars between the dark-framed shop windows)
         for i in range(k + 1):
             s = i * step
             p = (a[0] + u[0] * s - n[0] * 0.15, a[1] + u[1] * s - n[1] * 0.15)
-            mb.box(p[0], p[1], 0.0, 0.55, 0.5, TOP, 'Stone dark', rot=rot)
+            if i % 3 == 0:
+                mb.box(p[0], p[1], 0.0, 0.9, 0.56, TOP - 0.45, 'Wood', rot=rot)
+                for t in (-0.3, -0.1, 0.1, 0.3):   # the boards' joints
+                    q = (p[0] + u[0] * t - n[0] * 0.285, p[1] + u[1] * t - n[1] * 0.285)
+                    mb.box(q[0], q[1], 0.0, 0.015, 0.01, TOP - 0.45, 'Shop frame', rot=rot)
+            else:
+                mb.box(p[0], p[1], 0.0, 0.55, 0.5, TOP, 'Stone dark', rot=rot)
         for i in range(k):
-            s0, s1 = i * step + 0.28, (i + 1) * step - 0.28
+            s0, s1 = i * step + (0.45 if i % 3 == 0 else 0.28), (i + 1) * step - (0.45 if (i + 1) % 3 == 0 else 0.28)
             w = s1 - s0
             if w < 0.4:
                 continue
             m = (a[0] + u[0] * (s0 + s1) / 2 - n[0] * 0.3, a[1] + u[1] * (s0 + s1) / 2 - n[1] * 0.3)
-            wood = rnd.random() < 0.18
             for z0, z1 in ((0.0, GROUND - 0.45), (GROUND + 0.6, TOP - 0.1)):
-                if wood:
-                    mb.box(m[0], m[1], z0, w, 0.12, z1 - z0, 'Wood', rot=rot)
-                    continue
                 mb.box(m[0], m[1], z0, w, 0.03, z1 - z0, 'Shop glass', rot=rot)
                 for zz in (z0, z1 - 0.07, z0 + 2.9 if z1 - z0 > 3.5 else None):
                     if zz is not None:
@@ -78,7 +81,14 @@ def build(mats, col, fr, towers_fp):
             mb.box(m[0] + n[0] * 0.05, m[1] + n[1] * 0.05, GROUND - 0.45, w + 0.6, 0.3, 1.05, 'Stone dark', rot=rot)
     # the podium's roof: a terrace where no block stands, a projecting white edge, a glass railing
     roof = O.difference(towers_fp.buffer(0.05, join_style='mitre'))
-    mb.prism(O.buffer(0.6, join_style='mitre'), TOP - 0.45, TOP + 0.1, 'White band', None, 'White band')
+    # the canopy round the podium (render 6): a white slab a metre out, lights in its soffit
+    mb.prism(O.buffer(1.0, join_style='mitre'), TOP - 0.45, TOP + 0.1, 'White band', None, 'White band')
+    eave = O.buffer(0.55, join_style='mitre').exterior
+    for k2 in range(int(eave.length / 1.6)):
+        p = eave.interpolate(k2 * 1.6 + 0.8)
+        if towers_fp.buffer(0.3).contains(p):
+            continue
+        mb.box(p.x, p.y, TOP - 0.47, 0.16, 0.16, 0.02, 'Night white')
     for q in getattr(roof, 'geoms', [roof]):
         if q.geom_type == 'Polygon' and q.area > 2:
             mb.polygon_face(q, TOP + 0.11, 'Deck paving')

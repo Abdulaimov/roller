@@ -24,8 +24,9 @@ from complex.towers import add_rails, pick_material, solar_field
 
 from .config import BLOCKS, FIRST_FLAT_FLOOR, SLAB, height, level
 
-WALL = {'A': 'Stone pale', 'B': 'Stone pale', 'V': 'Stone pale'}
+WALL = {'A': 'Facade white', 'B': 'Facade white', 'V': 'Facade white'}   # (the model's white stone)
 SILL, HEAD = 0.45, 0.35
+PANORAMIC = 2.4   # m: windows this long on the sheets are the model's dark curtain-glass strips
 GLASS_FACE = {'B': lambda x, y: x > 12.5}   # Б: the balconies on the east face are glazed full height
 
 
@@ -93,7 +94,9 @@ def facade_floor(mb, block, plan, h, top=False):
         g = P(w)
         if g.area < 0.01:
             continue
-        mb.prism(g, 0.0, h, wall_mat, wall_mat)
+        # (the back walls of the loggias: warm beige, as on the developer's model)
+        back = not outdoor.is_empty and g.distance(outdoor) < 0.06 and g.distance(outside) > 0.3
+        mb.prism(g, 0.0, h, 'Loggia beige' if back else wall_mat, 'Loggia beige' if back else wall_mat)
     # windows: dark glass in black frames, wall below and above
     for wq in plan['windows']:
         g = P(wq)
@@ -103,6 +106,14 @@ def facade_floor(mb, block, plan, h, top=False):
         to_balcony = not outdoor.is_empty and g.distance(outdoor) < 0.12
         # the side the outside is on
         s_out = 1 if air.contains(Point(c[0] + v[0] * (t / 2 + 0.15), c[1] + v[1] * (t / 2 + 0.15))) else -1
+        if L >= PANORAMIC and not to_balcony:
+            # a panoramic strip (the model's dark curtain glass): floor to floor in a black grid,
+            # a dark panel over the slab's white band
+            pane(mb, c, u, v, L, t, s_out * (t / 2 - 0.08), 0.0, h, 'Window glass', frame='Frame dark', mullion=1.0)
+            # (flush with the white band it hides: 1 cm proud of it, no ledge)
+            fc = (c[0] + v[0] * s_out * (t / 2 + 0.055), c[1] + v[1] * s_out * (t / 2 + 0.055))
+            mb.box(fc[0], fc[1], -0.33, L - 0.02, 0.11, 0.48, 'Facade dark', rot=math.atan2(u[1], u[0]))
+            continue
         sill = 0.0 if to_balcony else SILL
         if sill > 0:
             mb.prism(g, 0.0, sill, wall_mat, wall_mat)
@@ -120,7 +131,7 @@ def facade_floor(mb, block, plan, h, top=False):
         if on_balcony and not glass_face(*c):
             add_rails(mb, [[(c[0] - u[0] * L / 2, c[1] - u[1] * L / 2), (c[0] + u[0] * L / 2, c[1] + u[1] * L / 2)]], 0.0, post_step=0)
         else:
-            pane(mb, c, u, v, L, t, 0.0, 0.0, h - 0.05, 'Tower glass', frame='Frame light', mullion=1.5)
+            pane(mb, c, u, v, L, t, 0.0, 0.0, h - 0.05, 'Tower glass', frame='Frame dark', mullion=1.0)
     # balcony parapets: glass railings (or, on Б's glazed face, glass to the ceiling)
     for pq in plan.get('parapets', []):
         g = P(pq)
@@ -130,51 +141,18 @@ def facade_floor(mb, block, plan, h, top=False):
         a = (c[0] - u[0] * L / 2, c[1] - u[1] * L / 2)
         b = (c[0] + u[0] * L / 2, c[1] + u[1] * L / 2)
         if glass_face(*c):
-            pane(mb, c, u, v, L, t, 0.0, 0.0, h - 0.05, 'Tower glass', frame='Frame light', mullion=1.5)
+            pane(mb, c, u, v, L, t, 0.0, 0.0, h - 0.05, 'Tower glass', frame='Frame dark', mullion=1.0)
         else:
             add_rails(mb, [[a, b]], 0.0, post_step=0)
     # the white pilasters (grey outlines on the sheets), through the slab bands
     for q in plan.get('pilasters', []):
         mb.prism_chamfer(P(q), -0.25, h, 'Stone white', 'Stone white' if top else None, None, c=0.02)
-    facade_grid(mb, plan, h, enc, outside, outdoor, top)
-
-
-def facade_grid(mb, plan, h, enc, outside, outdoor, top):
-    """The facade as the developer's model shows it (photos IMG_4103-4110) and the renders: a white
-    grid on a dark ground. The outer faces of the walls are clad in dark panels (the rooms keep
-    their light walls inside); every window and balcony opening stands between white pilasters,
-    floor to floor, and the floors' white bands run across them."""
-    ring = enc.buffer(0.03, join_style='mitre').difference(enc.buffer(-0.005, join_style='mitre'))
-    holes = [P(q).buffer(0.02, join_style='mitre') for q in plan['windows'] + plan['glazing'] + plan.get('parapets', [])]
-    if not outdoor.is_empty:
-        holes.append(outdoor.buffer(0.12, join_style='mitre'))
-    clad = ring.difference(unary_union(holes)) if holes else ring
-    for q in parts(clad):
-        if q.area > 0.002:
-            mb.prism(q, -0.02, h + 0.02, 'Facade dark', 'Facade dark' if top else None)
-    # the white pilasters at the jambs of every opening in the outer wall
-    jambs = []
-    for q in plan['windows'] + plan['glazing'] + plan.get('parapets', []):
-        g = P(q)
-        c, u, v, L, t = axis(g)
-        if L < 0.5:
-            continue
-        s_out = 1 if outside.contains(Point(c[0] + v[0] * (t / 2 + 0.2), c[1] + v[1] * (t / 2 + 0.2))) else -1
-        if not outside.buffer(0.05).intersects(g.buffer(0.3)):
-            continue
-        face = (c[0] + v[0] * s_out * (t / 2 + 0.06), c[1] + v[1] * s_out * (t / 2 + 0.06))
-        for sg in (-1, 1):
-            p = (face[0] + u[0] * sg * (L / 2 + 0.11), face[1] + u[1] * sg * (L / 2 + 0.11))
-            if any(math.dist(p, j) < 0.3 for j in jambs):
-                continue
-            jambs.append(p)
-            mb.box(p[0], p[1], -0.3, 0.24, 0.16, h + 0.3, 'Pilaster white', rot=math.atan2(u[1], u[0]))
 
 
 def slab_mesh(mb, plan, h):
     enc = P(plan['enclosure'])
     mb.prism(enc.buffer(-0.04, join_style='mitre'), -0.25, SLAB, 'Stone white', 'Shop floor', 'Stone white')
-    ring = enc.buffer(0.16, join_style='mitre').difference(enc.buffer(-0.04, join_style='mitre'))
+    ring = enc.buffer(0.1, join_style='mitre').difference(enc.buffer(-0.04, join_style='mitre'))
     mb.prism_chamfer(ring, -0.32, 0.14, 'White band', 'White band', 'White band', c=0.02)
 
 

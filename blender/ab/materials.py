@@ -70,6 +70,8 @@ AB_SPECS = {
     # Regnum Plaza's facade: the developer's model is a white grid on a dark ground
     'Facade dark': ('#2a2e35', 0.42, 0.25, {}),
     'Pilaster white': ('#f2f0eb', 0.62, 0.0, {}),
+    'Facade white': ('#eeebe5', 0.6, 0.0, {}),
+    'Loggia beige': ('#d8b991', 0.75, 0.0, {}),
     'Mulch': ('#4a3426', 1.0, 0.0, {}),
     'Frame crown': ('#7a7f84', 0.45, 0.5, {}),
     'Glass light': ('#8a9aa0', 0.05, 0.0, {}),

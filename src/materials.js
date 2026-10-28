@@ -359,6 +359,9 @@ const LIB = {
   // the facade's dark ground and white grid (the developer's model)
   'Facade dark': { set: 'concrete', tile: 2.5, color: '#2a2e35', roughness: 0.42, metalness: 0.25, normal: 0.15, vary: 0.01, env: 1.1 },
   'Pilaster white': { set: 'plaster', mapless: true, tile: 2.2, color: '#f2f0eb', roughness: 0.62, normal: 0.18, vary: 0.012, env: 0.9 },
+  'Facade white': { set: 'plaster', mapless: true, tile: 2.2, color: '#eeebe5', roughness: 0.66, normal: 0.2, vary: 0.012, env: 0.85 },
+  // the loggias' back walls: the model's warm beige (a deck texture there read as red from afar)
+  'Loggia beige': { set: 'plaster', mapless: true, tile: 2.2, color: '#d8b991', roughness: 0.75, normal: 0.15, vary: 0.02, env: 0.6 },
   'Stone pale': { set: 'plaster', mapless: true, tile: 2.2, color: '#b8bbbe', roughness: 0.7, normal: 0.25, env: 0.6 },
   // the cornice bands: bronze-gold as on the renders (the earlier #e8c08a was the yellowest thing on the facade)
   'Stone gold': { set: 'plaster', mapless: true, tile: 2.2, color: '#d0a062', roughness: 0.62, normal: 0.35, vary: 0.03, env: 0.6 },
@@ -437,7 +440,8 @@ const LIB = {
   'Flag warm': { set: 'concrete', tile: 1.4, color: '#d2c8b9', roughness: 0.95, normal: 0.7, vary: 0.06 },
   'Flag dark': { set: 'concrete', tile: 1.4, color: '#aeaaa3', roughness: 0.95, normal: 0.7, vary: 0.06 },
   'Cobble joint': { color: '#8a857e', roughness: 1 },
-  Wood: { set: 'deck', tile: 1.8, color: '#d9b08c', roughness: 0.9, normal: 0.6 },
+  // (the deck texture is red on its own: a cooler tint keeps it the warm brown of render 6)
+  Wood: { set: 'deck', tile: 1.8, color: '#bfae98', roughness: 0.85, normal: 0.6 },
   'Lattice wood': { set: 'deck', tile: 1.8, color: '#f0d2ad', roughness: 0.85, normal: 0.4 },
   'Rubber blue': { set: 'rubber', tile: 2, color: '#3f6ea8', roughness: 1, normal: 0.7 },
   // the school (21.10.2026): white render, coloured fins, a dark stone plinth

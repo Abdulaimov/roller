@@ -197,9 +197,11 @@ def build_site(mats, col, towers, podium_o):
         mb.prism(p.buffer(1.1, quad_segs=12), Z['paving'], Z['paving'] + 0.45, 'Stone white', 'Lawn')
         log_tree(mb, p.x, p.y, Z['paving'] + 0.45, rnd.uniform(5.0, 7.5), rnd.uniform(1.8, 2.6), 'broad')
         LS.WALK['solids'].append(p.buffer(1.15, quad_segs=8))
-    # street trees: big planes along both streets, on both pavements (the videos: tall old trees)
-    for line, step in [(((px0 - 60, py1 + 19.6), (px1 + 120, py1 + 19.6)), 9.0), (((px1 + 25.2, py0 - 120), (px1 + 25.2, py1 + 60)), 9.0),
-                       (((px0 - 50, py1 + 3.6), (px1 - 4, py1 + 3.6)), 12.0), (((px1 + 3.6, py0 - 40), (px1 + 3.6, py1 - 4)), 12.0)]:
+    # street trees: on the far pavements trees of the street (smaller than the old planes there,
+    # the renders keep the podium in view); on the podium's own pavements a low clipped hedge and
+    # narrow cypresses (renders 1 and 6)
+    for line, step, near in [(((px0 - 60, py1 + 19.6), (px1 + 120, py1 + 19.6)), 11.0, False), (((px1 + 25.2, py0 - 120), (px1 + 25.2, py1 + 60)), 11.0, False),
+                             (((px0 - 50, py1 + 3.6), (px1 - 4, py1 + 3.6)), 24.0, True), (((px1 + 3.6, py0 - 40), (px1 + 3.6, py1 - 4)), 24.0, True)]:
         (a, b) = line
         A, B = S(*a), S(*b)
         L = math.dist(A, B)
@@ -208,8 +210,20 @@ def build_site(mats, col, towers, podium_o):
             x, y = A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t
             if any(Polygon(t_['outline']).buffer(3).contains(Point(x, y)) for t_ in towers) or podium_o.buffer(2.5).contains(Point(x, y)):
                 continue
-            log_tree(mb, x, y, Z['paving'], rnd.uniform(12, 17), rnd.uniform(3.5, 5.0), 'broad')
+            if near:
+                log_tree(mb, x, y, Z['paving'], rnd.uniform(5.0, 6.5), rnd.uniform(0.6, 0.8), 'conifer')
+            else:
+                log_tree(mb, x, y, Z['paving'], rnd.uniform(8, 11), rnd.uniform(2.6, 3.6), 'broad')
             trees.append((x, y))
+        if near:
+            # the hedge: 0.6 m wide, 0.8 m high, along the kerb side of the pavement
+            hedge = LineString([A, B]).buffer(0.3, cap_style=2).difference(podium_o.buffer(1.0))
+            for t_ in towers:
+                hedge = hedge.difference(Polygon(t_['outline']).buffer(3))
+            for q in getattr(hedge, 'geoms', [hedge]):
+                if q.geom_type == 'Polygon' and q.area > 0.5:
+                    mb.prism(q, Z['paving'], Z['paving'] + 0.8, 'Shrub', 'Shrub')
+                    LS.WALK['solids'].append(q.buffer(0.1))
     # trees in the city's yards and along its pavements
     for k in range(260):
         p = rand_in(lawn_city.intersection(Point(0, 0).buffer(420)), rnd)
