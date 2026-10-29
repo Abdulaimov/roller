@@ -59,7 +59,9 @@ export function interiorMaterials() {
     floorUnder: std({ map: oak.map, roughnessMap: oak.rough, roughness: 0.62, bumpMap: oak.bump, bumpScale: 0.35, envMapIntensity: 0.9 }),
     tileWall: std({ map: tile.map, roughness: 0.16, envMapIntensity: 0.9 }, tile.metres),
     wall: std({ color: 0xf1ede6, map: plaster.map, roughness: 0.92, envMapIntensity: 0.55 }, plaster.metres),
-    struct: std({ color: 0xebe7e0, map: plaster.map, roughness: 0.92, envMapIntensity: 0.55 }, plaster.metres),
+    // (the columns painted like the walls: a column 1-2 cm proud of a wall in a darker shade read as
+    // a dark slit - flat 181)
+    struct: std({ color: 0xf1ede6, map: plaster.map, roughness: 0.92, envMapIntensity: 0.55 }, plaster.metres),
     ceiling: std({ color: 0xf7f5f1, roughness: 0.96, side: THREE.DoubleSide, envMapIntensity: 0.5 }),
     skirting: std({ color: 0xf4f2ee, roughness: 0.45 }),
     corridor: std({ color: 0xd2cfc9, roughness: 0.6 }),

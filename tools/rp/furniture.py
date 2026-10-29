@@ -104,8 +104,9 @@ def read(pg, fr, plan, rect):
         # to it: the bigger stays)
         keep = []
         for it in sorted(items, key=lambda q: -footprint(q).area):
+            # (two desks meeting in an L, a corner of one inside the other - flat 182: the smaller goes)
             if it['type'] in ('kitchen', 'bed', 'sofa', 'bath', 'shower', 'dining', 'desk', 'tv') and \
-                    any(o['type'] == it['type'] and footprint(o).intersection(footprint(it)).area > 0.05 for o in keep):
+                    any(o['type'] == it['type'] and footprint(o).intersection(footprint(it)).area > (0.005 if it['type'] == 'desk' else 0.05) for o in keep):
                 continue
             keep.append(it)
         items = keep
@@ -616,6 +617,7 @@ def bedroom(R, C, solid):
     C = [c for c in C if not dining_(c)]
     beds = [c for c in C if 0.8 <= c['w'] <= 2.15 and long_ok(c['w'], c['l']) and (c['fill'] > 0.88 or (c['hull'] > 0.75 and len(c['faces']) >= 3))]
     brs = [r for r in R if 0.8 <= r['w'] <= 2.15 and long_ok(r['w'], r['l'])]
+
     # (a box round a bed and the floor beside it is not a bed: one with a smaller bed inside goes)
     brs = [r for r in brs if not any(q is not r and q['w'] * q['l'] < 0.7 * r['w'] * r['l'] and r['poly'].buffer(-0.02).contains(Point(*q['c'])) for q in brs)]
     beds += [dict(c=r['c'], w=r['w'], l=r['l'], a=r['a'], faces=[1, 1], rect=True) for r in brs]
@@ -643,11 +645,22 @@ def bedroom(R, C, solid):
                 break
     if not beds:
         return []
+    # (a plain box of a single bed's size beside a double bed is a wardrobe - flat 182 had two read
+    # as beds - unless its twin stands beside it: two single beds side by side)
+    if any(b['w'] >= 1.3 for b in beds):
+        twin = lambda b: any(o is not b and o['w'] < 1.3 and abs(o["l"] - b["l"]) < 0.15 and 0.5 < math.dist(o["c"], b["c"]) < 2.6 for o in beds)
+        beds = [b for b in beds if not (b['w'] < 1.3 and not twin(b))]
     out, used = [], []
+    double = False
     for b in sorted(beds, key=lambda b: (not b.get('rect'), -b['w'] * b['l'])):
         bp = rect_poly(b['c'], b['w'], b['l'], b['a'])
         if any(bp.intersects(o.buffer(-0.05)) for o in used):
             continue
+        # (one double bed to a bedroom: flat 182's 45 m² bedroom had a second one read from its
+        # sitting corner)
+        if b['w'] >= 1.3 and double:
+            continue
+        double = double or b['w'] >= 1.3
         used.append(bp)
         if b['w'] > 0.9 * b['l']:
             # (a square bed: its head is the end with the pillows)

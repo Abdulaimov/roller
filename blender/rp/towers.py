@@ -20,7 +20,7 @@ from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import unary_union
 
 from complex.geom import MeshBuilder, get_collection, log_tree, make_object
-from complex.towers import add_rails, pick_material, solar_field
+from complex.towers import add_rails, pick_material
 
 from .config import BLOCKS, FIRST_FLAT_FLOOR, SLAB, height, level
 
@@ -28,6 +28,7 @@ WALL = {'A': 'Facade white', 'B': 'Facade white', 'V': 'Facade white'}   # (the 
 SILL, HEAD = 0.45, 0.35
 PANORAMIC = 2.4   # m: windows this long on the sheets are the model's dark curtain-glass strips
 GLASS_FACE = {'B': lambda x, y: x > 12.5}   # Б: the balconies on the east face are glazed full height
+SOLAR = {'A': 4, 'B': 2, 'V': 9}   # PV arrays on the roof (two rows of panels each), counted on renders 4 and 5
 
 
 def P(p):
@@ -79,7 +80,63 @@ def pane(mb, c, u, v, L, t, off, z0, z1, glass, frame='Frame dark', mullion=1.5,
         mb.box(cx + u[0] * s, cy + u[1] * s, z0, fw, 0.09, z1 - z0, frame, rot=rot)
 
 
-def facade_floor(mb, block, plan, h, top=False):
+def outer_edges(g, outside):
+    """the edges of a strip (a balcony's parapet or glass) that face the open air, as (a, b) lines
+    a few centimetres in from it: an L-shaped corner balcony has two (its long axis ran diagonally
+    across the corner, a railing through the air - block В, 28.10.2026)"""
+    out = []
+    pts = list(g.exterior.coords)
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        L = math.hypot(x1 - x0, y1 - y0)
+        if L < 0.25:
+            continue
+        nx, ny = (y1 - y0) / L, -(x1 - x0) / L
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        if g.contains(Point(mx + nx * 0.01, my + ny * 0.01)):
+            nx, ny = -nx, -ny
+        if outside.contains(Point(mx + nx * 0.15, my + ny * 0.15)):
+            out.append(((x0 - nx * 0.05, y0 - ny * 0.05), (x1 - nx * 0.05, y1 - ny * 0.05)))
+    return out
+
+
+def solar_arrays(mb, free, z, n, cols=4, pw=1.0, pl=1.7, tilt=18):
+    """n arrays of two tilted rows of `cols` panels, spread over the free roof (renders 4, 5: groups
+    round the plant rooms and along the parapet, not a field)"""
+    if n <= 0 or free.is_empty:
+        return
+    W, D = cols * (pw + 0.05), 2 * pl + 0.7
+    x0, y0, x1, y1 = free.bounds
+    cands = []
+    y = y0 + D / 2
+    while y <= y1 - D / 2:
+        x = x0 + W / 2
+        while x <= x1 - W / 2:
+            if free.contains(box(x - W / 2, y - D / 2, x + W / 2, y + D / 2)):
+                cands.append((x, y))
+            x += 0.5
+        y += 0.5
+    if not cands:
+        return
+    # the first next to the parapet, then each as far from the others as it can be
+    edge = free.exterior
+    picks = [min(cands, key=lambda c: edge.distance(Point(c)))]
+    while len(picks) < n:
+        far = max(cands, key=lambda c: min(math.dist(c, p) for p in picks))
+        if min(math.dist(far, p) for p in picks) < max(W, D) + 0.6:
+            break
+        picks.append(far)
+    rise = pl * math.sin(math.radians(tilt))
+    for (cx, cy) in picks:
+        for r in (0, 1):
+            ya = cy - D / 2 + r * (pl + 0.7)
+            for k in range(cols):
+                xa = cx - W / 2 + k * (pw + 0.05)
+                mb.face([(xa, ya, z + 0.3), (xa + pw, ya, z + 0.3), (xa + pw, ya + pl, z + 0.3 + rise), (xa, ya + pl, z + 0.3 + rise)], 'Solar panel')
+            for yy, hh in ((ya + 0.05, 0.3), (ya + pl - 0.05, 0.3 + rise)):
+                mb.box(cx, yy, z, W, 0.05, hh, 'Frame dark')
+
+
+def facade_floor(mb, block, plan, h, top=False, dark=False):
     key = block['key']
     enc = P(plan['enclosure'])
     outside = box(*enc.buffer(30).bounds).difference(enc)
@@ -87,7 +144,8 @@ def facade_floor(mb, block, plan, h, top=False):
     outdoor = unary_union(out_rooms) if out_rooms else Polygon()
     air = outside.union(outdoor)
     glass_face = GLASS_FACE.get(key, lambda x, y: False)
-    wall_mat = WALL[key]
+    # (renders 1-4: the top floors of blocks А and В clad in graphite under the white crown)
+    wall_mat = 'Facade dark' if dark else WALL[key]
     # walls and concrete as drawn (the inner ones show through the windows); the back walls of the
     # balconies light, as on the renders (warm wood there read as red from afar)
     for w in plan['walls'] + plan['struct']:
@@ -129,7 +187,8 @@ def facade_floor(mb, block, plan, h, top=False):
             continue
         on_balcony = not outdoor.is_empty and g.distance(outdoor) < 0.15
         if on_balcony and not glass_face(*c):
-            add_rails(mb, [[(c[0] - u[0] * L / 2, c[1] - u[1] * L / 2), (c[0] + u[0] * L / 2, c[1] + u[1] * L / 2)]], 0.0, post_step=0)
+            for a, b in outer_edges(g, outside) or [((c[0] - u[0] * L / 2, c[1] - u[1] * L / 2), (c[0] + u[0] * L / 2, c[1] + u[1] * L / 2))]:
+                add_rails(mb, [[a, b]], 0.0, post_step=0)
         else:
             pane(mb, c, u, v, L, t, 0.0, 0.0, h - 0.05, 'Tower glass', frame='Frame dark', mullion=1.0)
     # balcony parapets: glass railings (or, on Б's glazed face, glass to the ceiling)
@@ -143,7 +202,8 @@ def facade_floor(mb, block, plan, h, top=False):
         if glass_face(*c):
             pane(mb, c, u, v, L, t, 0.0, 0.0, h - 0.05, 'Tower glass', frame='Frame dark', mullion=1.0)
         else:
-            add_rails(mb, [[a, b]], 0.0, post_step=0)
+            for a_, b_ in outer_edges(g, outside) or [(a, b)]:
+                add_rails(mb, [[a_, b_]], 0.0, post_step=0)
     # the white pilasters (grey outlines on the sheets), through the slab bands
     for q in plan.get('pilasters', []):
         mb.prism_chamfer(P(q), -0.25, h, 'Stone white', 'Stone white' if top else None, None, c=0.02)
@@ -192,12 +252,12 @@ def crown(mb, block, plan, zr):
         if q.area < 6:
             continue
         q = q.simplify(0.3)
-        mb.prism_chamfer(q, zr + 0.15, zr + 3.6, 'Stone white', None, None, c=0.02)
+        mb.prism_chamfer(q, zr + 0.15, zr + 3.6, 'Plant room', None, None, c=0.02)
         mb.prism(q.buffer(0.25, join_style='mitre'), zr + 3.6, zr + 3.9, 'White band', 'Roof', 'White band')
     # solar panels on the free roof (the renders' roofs: plant rooms and panels, no trees - the
     # small trees along the edge read as trees standing in the sky)
     free = roof.buffer(-2.2).difference(core.buffer(1.2))
-    solar_field(mb, free, zr + 0.15, angle=0)
+    solar_arrays(mb, free, zr + 0.15, SOLAR[block['key']])
 
 
 def frame(b):
@@ -231,11 +291,12 @@ def build_block(key, mats, root_col, plans):
     for f in range(FIRST_FLAT_FLOOR, top_floor + 1):
         pk = b['plans'][f]
         z, h = level(f), height(f)
-        ck = (pk, f == top_floor)
+        dark = key in ('A', 'V') and f > top_floor - 3
+        ck = (pk, f == top_floor, dark)
         if ck not in cache:
             sm, wm = MeshBuilder(), MeshBuilder()
             slab_mesh(sm, plans[pk], h)
-            facade_floor(wm, b, plans[pk], h, top=f == top_floor)
+            facade_floor(wm, b, plans[pk], h, top=f == top_floor, dark=dark)
             nm = f'{key} {pk} {len(cache)}'
             cache[ck] = (sm.to_mesh(nm + ' slab', mats), wm.to_mesh(nm + ' walls', mats))
         sm, wm = cache[ck]

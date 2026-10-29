@@ -337,7 +337,8 @@ const LIB = {
   // white stone and render: the plaster set's relief and roughness, no colour map (its grey would
   // make the white stone grey; the renders' white is white)
   'White band': { set: 'plaster', mapless: true, tile: 2.2, color: '#f1efea', roughness: 0.6, normal: 0.15, vary: 0.01, env: 1.0 },
-  'Plant room': { set: 'plaster', tile: 2.2, color: '#e4e1db', roughness: 0.9, normal: 0.4 },
+  // (Regnum renders 4, 5: the roof plant rooms mid grey under a white cap)
+  'Plant room': { set: 'plaster', mapless: true, tile: 2.2, color: '#8e9297', roughness: 0.8, normal: 0.2, env: 0.6 },
   'Stone fin': { set: 'concrete', tile: 3, color: '#e3d6c2', roughness: 0.9, normal: 0.5 },
   Frame: { color: '#d7d1c6', roughness: 0.42, metalness: 0, env: 0.8 },
   Metal: { color: '#9aa0a5', roughness: 0.32, metalness: 0.9, env: 1 },
@@ -368,7 +369,8 @@ const LIB = {
   // the loggias' back walls: the model's warm beige (a deck texture there read as red from afar)
   // (Regnum renders 1, 2, 6: the balconies' back walls warm wood boards)
   // (the deck texture read as red stripes from afar: a plain warm light brown)
-  'Loggia beige': { set: 'plaster', mapless: true, tile: 2.2, color: '#b99474', roughness: 0.7, normal: 0.15, vary: 0.03, env: 0.55 },
+  // (at night the balconies glow warm, render 2: the lit loggias)
+  'Loggia beige': { set: 'plaster', mapless: true, tile: 2.2, color: '#b99474', roughness: 0.7, normal: 0.15, vary: 0.03, env: 0.55, nightGlow: [0, 0.45], glowColor: '#ffb26b' },
   'Stone pale': { set: 'plaster', mapless: true, tile: 2.2, color: '#b8bbbe', roughness: 0.7, normal: 0.25, env: 0.6 },
   // the cornice bands: bronze-gold as on the renders (the earlier #e8c08a was the yellowest thing on the facade)
   'Stone gold': { set: 'plaster', mapless: true, tile: 2.2, color: '#d0a062', roughness: 0.62, normal: 0.35, vary: 0.03, env: 0.6 },
@@ -603,6 +605,12 @@ export function setupMaterial(m, renderer) {
   }
   if (!spec) return Promise.resolve();
   if (spec.color) m.color.set(spec.color);
+  if (spec.nightGlow) {
+    // (lit by night: src/night.js mixes the emissive intensity between day and night)
+    m.emissive?.set(spec.glowColor ?? '#ffb26b');
+    m.emissiveIntensity = spec.nightGlow[0];
+    m.userData.nightGlow = spec.nightGlow;
+  }
   if (spec.roughness !== undefined) m.roughness = spec.roughness;
   if (spec.metalness !== undefined) m.metalness = spec.metalness;
   m.envMapIntensity = spec.env ?? 0.85;

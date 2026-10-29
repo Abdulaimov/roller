@@ -536,6 +536,7 @@ def extract(key, debug=False):
     doorways = []
     if vec:
         walls, struct, doorways = vec
+        walls, struct = vector_windows(pg, fr, walls, struct, win_polys, glazing, out_ring)
     else:
         square_doorways(rooms, walls, struct, swings)
 
@@ -1036,6 +1037,58 @@ def vector_plan(pg, fr, R, rooms, struct, windows_, parapets, glazing, swings, o
                 out.append([[round(x, 3), round(y, 3)] for x, y in ring])
         return out
     return rings(rest), rings(conc), [[[round(x, 3), round(y, 3)] for x, y in list(d.exterior.coords)[:-1]] for d in doorways]
+
+
+def vector_windows(pg, fr, walls, struct, windows_, glazing, outline):
+    """the windows the raster missed (the sheets draw some only as thin blue lines across the wall:
+    a whole column of them on block А's west face, a bedroom of flat 183 left without its window):
+    each run of the sheet's blue glass lines (0, 0, 1) lying in a wall, not yet a window, becomes one
+    - the wall cut through its thickness along the run. Adds to windows_; returns walls, struct"""
+    enc = Polygon(outline).buffer(0.3)
+    lines = []
+    for d in pg.get_drawings():
+        c = d.get('color')
+        if not c or abs(c[0]) > 0.02 or abs(c[1]) > 0.02 or abs(c[2] - 1) > 0.02:
+            continue
+        for it in d['items']:
+            if it[0] != 'l':
+                continue
+            ln = LineString([fr.to_plan(it[1].x, it[1].y), fr.to_plan(it[2].x, it[2].y)])
+            if ln.length >= 0.4 and enc.contains(ln):
+                lines.append(ln)
+    if not lines:
+        return walls, struct
+    W = unary_union([Polygon(p).buffer(0) for p in walls])
+    S_ = unary_union([Polygon(p).buffer(0) for p in struct])
+    solid = W.union(S_)
+    have = unary_union([Polygon(p).buffer(0.15) for p in windows_ + glazing] or [Polygon()])
+    groups = unary_union([ln.buffer(0.08, cap_style=2) for ln in lines])
+    cuts = []
+    for g in getattr(groups, 'geoms', [groups]):
+        if g.area < 0.05 or g.intersects(have) or g.intersection(solid).area < 0.5 * g.area:
+            continue
+        r = g.minimum_rotated_rectangle
+        xs = list(r.exterior.coords)[:4]
+        e = [(xs[1][0] - xs[0][0], xs[1][1] - xs[0][1]), (xs[2][0] - xs[1][0], xs[2][1] - xs[1][1])]
+        u = max(e, key=lambda v: math.hypot(*v))
+        L = math.hypot(*u)
+        if L < 0.5:
+            continue
+        u = (u[0] / L, u[1] / L)
+        v = (-u[1], u[0])
+        cx, cy = r.centroid.x, r.centroid.y
+        band = Polygon([(cx - u[0] * (L / 2 - 0.08) + v[0] * s1 * 0.7, cy - u[1] * (L / 2 - 0.08) + v[1] * s1 * 0.7) for s1 in (-1, 1)] +
+                       [(cx + u[0] * (L / 2 - 0.08) + v[0] * s1 * 0.7, cy + u[1] * (L / 2 - 0.08) + v[1] * s1 * 0.7) for s1 in (1, -1)])
+        cut = solid.intersection(band)
+        cut = max(getattr(cut, 'geoms', [cut]), key=lambda q: q.area if q.geom_type == 'Polygon' else 0) if not cut.is_empty else cut
+        if cut.is_empty or cut.geom_type != 'Polygon' or cut.area < 0.1 * L or not cut.intersects(g):
+            continue
+        cuts.append(cut)
+        windows_.append([[round(x, 3), round(y, 3)] for x, y in list(cut.exterior.coords)[:-1]])
+    if not cuts:
+        return walls, struct
+    C = unary_union(cuts)
+    return rings_of(W.difference(C)), rings_of(S_.difference(C))
 
 
 def through_glass(D, *lists):

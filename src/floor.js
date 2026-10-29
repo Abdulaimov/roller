@@ -684,6 +684,15 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
       const { r } = it;
       const t = (q[0] - r.a[0]) * r.u[0] + (q[1] - r.a[1]) * r.u[1], d = (q[0] - r.a[0]) * r.n[0] + (q[1] - r.a[1]) * r.n[1];
       if (Math.abs(d) > 0.7 || t < -0.2 || t > it.L + 0.2) continue;
+      // (between two rooms the drawn door must open from the one into the other: a bedroom's door
+      // off the hall, right at the corner, stood in the wall between a kitchen and that bedroom -
+      // flat 183)
+      if (it.across === 'same' && q.length >= 6) {
+        const into = [q[2], q[3]], back = [2 * q[0] - q[2], 2 * q[1] - q[3]];
+        const pair = [it.room, it.other];
+        const ins = pair.findIndex((x) => inside(x.poly, ...into)), bak = pair.findIndex((x) => inside(x.poly, ...back));
+        if (ins < 0 || bak < 0 || ins === bak) continue;
+      }
       const f = freeOf(it).find(([f0, f1]) => t > f0 - 0.2 && t < f1 + 0.2 && f1 - f0 >= 0.55);
       if (f) doorIn(it, Math.min(Math.max(t, f[0] + 0.45), f[1] - 0.45), it.across === 'common' ? 0.96 : 0.9);
     }
