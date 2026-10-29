@@ -368,22 +368,23 @@ const LIB = {
   // glass: dark body seen through, reflections of the sky do the rest; slight tints only
   // (28.10.2026, Regnum renders 1-6: blue-grey coated glass with the sky in it, not the near-black
   // of before - the rooms behind it show, the reflection does most of the work)
+  // (the virtual rooms behind the glass: 3.3 m storeys from floor 3 at 10.1 m, Regnum's levels)
   // (28.10.2026, the user on renders 1-4: «grey, mirror-like, the windows hardly seen»: more of the
   // sky in it, the rooms behind dimmer, blue-grey)
-  'Window glass': { ...glass('#000000', 0.03, { env: 1.6, tint: '#aab8c8', interior: [2.9, 3.5, 4.2, 12.0, 0.15, 0.3, 0.01, 0.62, 1.45], specular: '#dbe6ee' }), physical: { ior: 1.9 } },
+  'Window glass': { ...glass('#000000', 0.03, { env: 1.6, tint: '#aab8c8', interior: [2.9, 3.3, 4.2, 10.1, 0.15, 0.3, 0.01, 0.62, 1.45], specular: '#dbe6ee' }), physical: { ior: 1.9 } },
   // block A (renders 1, 2, 4): dark blue-green coated glass, the rooms behind it readable (curtains,
   // furniture, a light here and there), the sky in it strongest towards the top and at grazing angles
   // (22.10.2026: darker, as on renders 1, 2 and 4: a charcoal-blue body, the sky in it, not a pale blue face)
   // at night (the tower's night render): most rooms lit, the light and the glass teal
   // (Regnum: block Б's glass corner, renders 1, 2, 4 - a light, sky-blue mirror in pale frames)
-  'Tower glass': { ...glass('#000000', 0.02, { env: 1.5, tint: '#b7c9d7', interior: [3.2, 3.75, 6.0, 12.0, 0.22, 0.36, 0.006, 0.46, 1.3], specular: '#e2ebf2', night: { lamp: '#f0c88a', share: 0.55, dim: 0.1 } }), physical: { ior: 2.1 } },
+  'Tower glass': { ...glass('#000000', 0.02, { env: 1.5, tint: '#b7c9d7', interior: [3.2, 3.3, 6.0, 10.1, 0.22, 0.36, 0.006, 0.46, 1.3], specular: '#e2ebf2', night: { lamp: '#f0c88a', share: 0.55, dim: 0.1 } }), physical: { ior: 2.1 } },
   'Strip dark': { color: '#3e3934', roughness: 0.55, metalness: 0.25, env: 0.6 },
   // the slab blocks (renders 1-3): golden sandstone cornices and bay frames; the narrow tall
   // glazing light grey, the dark strips dark green, the corner bays blue
   // the facade's dark ground and white grid (the developer's model)
   // (Regnum renders 1, 4: the graphite faces towards block Б and the yard faces' top - metal panels
   // in a grid of joints, a little sheen)
-  'Facade dark': { set: 'plaster', mapless: true, tile: 2.2, color: '#4c4c52', roughness: 0.45, metalness: 0.12, normal: 0.08, vary: 0.01, env: 0.9, joints: [1.2, 1.1, 0.014, 9.0] },
+  'Facade dark': { set: 'plaster', mapless: true, tile: 2.2, color: '#4c4c52', roughness: 0.45, metalness: 0.12, normal: 0.08, vary: 0.01, env: 0.9, joints: [1.2, 1.1, 0.014, 10.1] },
   // (Regnum renders 1-4: the pilasters silver-white with a sheen, not chalk white)
   'Pilaster white': { set: 'plaster', mapless: true, tile: 2.2, color: '#d6dade', roughness: 0.42, metalness: 0.15, normal: 0.1, vary: 0.012, env: 1.0 },
   // (Regnum renders 1-4: the wall panels between the white pilasters a light cool grey - metal
@@ -391,7 +392,7 @@ const LIB = {
   'Facade white': { set: 'plaster', mapless: true, tile: 2.2, color: '#d2d6db', roughness: 0.5, metalness: 0.08, normal: 0.12, vary: 0.01, env: 1.0 },
   // (28.10.2026, renders 1-4: the street faces between the glass strips and the white pilasters -
   // silver metal cassettes in a grid, the sky in them; grey, not white)
-  'Facade silver': { set: 'plaster', mapless: true, tile: 2.2, color: '#a3abb8', roughness: 0.36, metalness: 0.3, normal: 0.06, vary: 0.01, env: 1.25, joints: [1.2, 1.65, 0.012, 9.0] },
+  'Facade silver': { set: 'plaster', mapless: true, tile: 2.2, color: '#a3abb8', roughness: 0.36, metalness: 0.3, normal: 0.06, vary: 0.01, env: 1.25, joints: [1.2, 1.65, 0.012, 10.1] },
   // the loggias' back walls: the model's warm beige (a deck texture there read as red from afar)
   // (Regnum renders 1, 2, 6: the balconies' back walls warm wood boards)
   // (the deck texture read as red stripes from afar: a plain warm light brown)

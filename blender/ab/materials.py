@@ -75,6 +75,7 @@ AB_SPECS = {
     'Facade silver': ('#b4bac2', 0.35, 0.4, {}),
     'Loggia floor': ('#8c9096', 0.6, 0.0, {}),
     'Podium wood': ('#5a4535', 0.7, 0.0, {}),
+    'Ramp dark': ('#16181b', 0.9, 0.0, {}),
     'Loggia beige': ('#d8b991', 0.75, 0.0, {}),
     'Mulch': ('#4a3426', 1.0, 0.0, {}),
     'Frame crown': ('#7a7f84', 0.45, 0.5, {}),

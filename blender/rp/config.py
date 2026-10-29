@@ -10,9 +10,13 @@ Site metres here: x east, y north, 0 at the middle of block Б's axes. OSM (the 
 metres east / north of 38.5662 N, 68.7868 E; Б's middle is at OSM (-85.9, 59.8) (its outer corner a
 pavement's width from the crossing of the two streets).
 
-Heights (no sections in the book): floor 1 at 0 (the shops; the sheets mark +0.000 and +3.000 on its
-split levels and +6.000 / +4.500 on floor 2), two shop floors of 4.5 m, so floor 3 at 9.0 m, then
-3.3 m per apartment floor.
+Heights (no sections in the book): floor 1 at 0.000 and floor 2 at 6.000, as the sheets' titles give
+them («Тарҳи ошёнаи 2-юм дар ниш. 6,000»; the stairs of floor 1 land at +1.500, +3.000, +4.500, the
+shops' mezzanine at +3.000). Floor 3 is not marked: the renders give the podium about 3.06 apartment
+storeys high (render 3: 98 px against 32 px a storey; render 6: floor 2's glazing two thirds of
+floor 1's), so with 3.3 m storeys floor 2 is 4.1 m and floor 3 at 10.1 m (it was 4.5 + 4.5 = 9.0
+before 29.10.2026, floor 2 at 4.5 against the sheet's 6.0). The apartment storey (3.3 m) is assumed:
+the book has no section.
 """
 import json
 import math
@@ -22,11 +26,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROT = -49.5            # degrees: sheet x-axis from east towards north
 OSM_ORIGIN = (-85.9, 59.8)
 
-GROUND = 4.5
-SECOND = 4.5
+GROUND = 6.0
+SECOND = 4.1
 STOREY = 3.3
 SLAB = 0.25
 FIRST_FLAT_FLOOR = 3
+# the drive down into the basement (sheets 10 and 17: «Пандус», the scheme's two lines from кӯчаи
+# Нарзиқулова into В's west end): its door in the podium, sheet x from / to
+RAMP_X = (-67.7, -63.4)
+# the doors from the courtyard (the scheme's four arrows): В's two on its yard face, Б's in the inner
+# corner, А's on its yard face - sheet point on the face and the way out (sheet axes)
+DOORS = [((-50.2, -11.6), (0, -1)), ((-38.1, -11.6), (0, -1)), ((-16.2, -13.3), (-1, 0)), ((-11.5, -19.0), (-1, 0))]
 
 
 def level(n):

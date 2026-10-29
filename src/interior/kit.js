@@ -11,6 +11,23 @@ import { Q } from '../quality.js';
 
 const SEG = Q.level === 'high' ? 3 : 1;
 
+// convex hull of plan points (monotone chain), counter-clockwise
+function hull(pts) {
+  const p = pts.map(([x, y]) => [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], hi = [];
+  for (const q of p) {
+    while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop();
+    lo.push(q);
+  }
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i];
+    while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], q) <= 0) hi.pop();
+    hi.push(q);
+  }
+  return lo.slice(0, -1).concat(hi.slice(0, -1));
+}
+
 // box-projected UVs in metres, from the geometry's final position (seamless across pieces)
 function boxUV(g, metres) {
   const p = g.attributes.position, n = g.attributes.normal;
@@ -168,10 +185,45 @@ export class Kit {
   }
 
   rollback(mark) {
+    const gone = new Set();
     for (const [mat, list] of this.parts) {
       const n = mark.get(mat) ?? 0;
-      list.splice(n).forEach((g) => g.dispose());
+      list.splice(n).forEach((g) => (gone.add(g), g.dispose()));
     }
+    if (this.rec) this.rec = this.rec.filter((r) => !r.geos.some((g) => gone.has(g)));
+  }
+
+  // ---- the checks' record of what stands where (tools/rp/check_furniture.mjs; off unless rec is
+  // an array): each piece as built - its footprint in plan metres (the convex hull of its vertices)
+  // and its height range. Pieces nest (a chair inside a dining group): a piece is what it added
+  // itself, not what the pieces inside it added.
+  begin(what) {
+    if (this.rec) (this.recStack ??= []).push({ what, mark: this.mark() });
+    return this;
+  }
+
+  end() {
+    if (!this.rec) return this;
+    const f = this.recStack.pop();
+    this.claimed ??= new Set();
+    const pts = [], geos = [];
+    let y0 = Infinity, y1 = -Infinity;
+    for (const [mat, list] of this.parts) {
+      for (let i = f.mark.get(mat) ?? 0; i < list.length; i++) {
+        const g = list[i];
+        if (this.claimed.has(g)) continue;
+        this.claimed.add(g);
+        geos.push(g);
+        const p = g.attributes.position;
+        for (let j = 0; j < p.count; j++) {
+          pts.push([p.getX(j), -p.getZ(j)]);
+          y0 = Math.min(y0, p.getY(j));
+          y1 = Math.max(y1, p.getY(j));
+        }
+      }
+    }
+    if (pts.length >= 3) this.rec.push({ what: f.what, hull: hull(pts), y0, y1, geos });
+    return this;
   }
 
   build(group, own, { cast = true } = {}) {

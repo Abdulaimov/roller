@@ -13,7 +13,7 @@ import { PLANS, planFrame, towerByKey } from './config.js';
 import { distToPolygon, distToSegment, inside, innerRect, interiorPoint } from './geometry.js';
 import { interiorMaterials } from './interior/materials.js';
 import { Kit } from './interior/kit.js';
-import * as F from './interior/furniture.js';
+import * as FF from './interior/furniture.js';
 import { Q } from './quality.js';
 
 const SILL = 0.85;
@@ -21,6 +21,19 @@ const HEAD = 0.35;
 const DOOR_H = 2.1;
 const CEIL = 0.02; // the ceiling hangs this far under the walls' tops (see the walk-through's ceiling)
 const HIGH = Q.level === 'high';
+
+// every piece of furniture through the kit's record (tools/rp/check_furniture.mjs checks each one,
+// the parts of a group too); the record is off unless a check turns it on
+const F = Object.fromEntries(Object.entries(FF).map(([name, fn]) => [name, typeof fn !== 'function' ? fn : (k, ...a) => {
+  k?.begin?.(name);
+  try {
+    return fn(k, ...a);
+  } finally {
+    k?.end?.();
+  }
+}]));
+// (set by the checks in tools/: buildFloor's result then lists every piece as built)
+export const RECORD = { pieces: false };
 
 const shape = (poly) => new THREE.Shape(poly.map(([x, y]) => new THREE.Vector2(x, y)));
 // plan polygon -> vertical prism in local (x, height, -y)
@@ -179,6 +192,7 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
   const own = [];
   const floorMeshes = [];
   const k = new Kit();
+  if (RECORD.pieces) k.rec = [];
   const lights = []; // { pos: [x, y, z] in plan / height, room, kind }
 
   const solid = new PolyIndex();
@@ -192,6 +206,7 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
   const terraceAt = new PolyIndex();
   for (const apt of apts) for (const b of apt.data.balconies) terraceAt.add(b.poly, 'terrace', { apt, room: b });
 
+  const balconySets = []; // the balconies' table and chairs, placed after the doors
   // collision outlines (plan segments): walls, windows and glazing, then doors and furniture
   const segments = [];
   const obstacles = []; // furniture and door leaves (for the checks in tools/)
@@ -231,8 +246,8 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
       m.userData = { apt, room: b };
       group.add(m);
       floorMeshes.push(m);
-      const t = balconyFurniture(k, M, b.poly);
-      if (t && walk === apt) addOutline([[t[0] - 0.36, t[1] - 0.36], [t[0] + 0.36, t[1] - 0.36], [t[0] + 0.36, t[1] + 0.36], [t[0] - 0.36, t[1] + 0.36]], 'table');
+      // (its table and chairs once the doors are made: clear of their swings - furniture.js)
+      balconySets.push({ apt, poly: b.poly });
     }
   }
   for (const c of plan.common ?? []) k.world().add(M.corridor, flat(c, 0.004));
@@ -279,7 +294,7 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
       return [at(t0, z0), at(t1, z0), at(t1, z1), at(t0, z1)];
     };
     const cw = Math.min(0.55, len * 0.3);
-    if (fitHere && ['living', 'bedroom'].includes(owner.room.kind) && !covered(along(-0.3, cw, 0.08, 0.2)) && !covered(along(len - cw, len + 0.3, 0.08, 0.2))) curtains(k, M, ia, ib, n, H, len);
+    if (fitHere && ['living', 'bedroom'].includes(owner.room.kind) && !covered(along(-0.3, cw, 0.08, 0.2)) && !covered(along(len - cw, len + 0.3, 0.08, 0.2))) curtains(k, M, ia, ib, n, H, len, solid);
     const rw = Math.min(len * 0.75, 1.6);
     // (none on the loggias: they are not heated)
     if (fitHere && !owner.room._wet && !['loggia', 'terrace'].includes(owner.room.kind) && len > 0.7 &&
@@ -318,8 +333,7 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
           for (const [end, nb, sgn] of [[r.a, runs[(i - 1 + runs.length) % runs.length], 1], [r.b, runs[(i + 1) % runs.length], -1]]) {
             if (nb.kind !== 'wall' || r.len < 1.2) continue;
             const c = [end[0] + r.u[0] * sgn * 0.32 + r.n[0] * 0.16, end[1] + r.u[1] * sgn * 0.32 + r.n[1] * 0.16];
-            k.at(c[0], c[1], Math.atan2(r.n[1], r.n[0]));
-            F.curtain(k, M.sheer, 0.55, H - 0.05, 0.015);
+            hangCurtain(k, M, solid, c, Math.atan2(r.n[1], r.n[0]), [r.u[0] * sgn, r.u[1] * sgn], 0.55, H);
           }
         }
       });
@@ -328,7 +342,7 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
   for (const w of plan.glazing) {
     if (claimed.has(w)) continue;
     k.world().add(M.glass, prism(w, 0, H));
-    glazingFrame(k, M, w, H, roomOf, fitted, (x, y) => (solid.at(x, y)?.kind === 'glass' ? solid.at(x, y) : null));
+    glazingFrame(k, M, w, H, roomOf, fitted, (x, y) => (solid.at(x, y)?.kind === 'glass' ? solid.at(x, y) : null), solid);
   }
 
   // ---- the lifts: the cars in their shafts as drawn, the doors on the hall side ----
@@ -890,11 +904,18 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     obstacles.push({ what: shut ? 'door shut' : 'door', poly: [h, tip] });
     if (shut) return;
     const sx = w[0] * leafW, sy = w[1] * leafW;
-    keepout.push(way([h, tip, [tip[0] + sx, tip[1] + sy], [h[0] + sx, h[1] + sy]], room));
+    keepout.push(Object.assign(way([h, tip, [tip[0] + sx, tip[1] + sy], [h[0] + sx, h[1] + sy]], room), { swing: true }));
     // and a way round the open leaf's edge (furniture right at its tip would shut the room off)
     const far = [h[0] + n[0] * (leafW + 0.7), h[1] + n[1] * (leafW + 0.7)];
     keepout.push(way([tip, far, [far[0] + sx, far[1] + sy], [tip[0] + sx, tip[1] + sy]], room));
     keepout.push(way([tip, far, [far[0] - w[0] * 0.65, far[1] - w[1] * 0.65], [tip[0] - w[0] * 0.65, tip[1] - w[1] * 0.65]], room));
+  }
+
+  // the balconies' table and two chairs: where they stand clear of the door swings, wholly on the
+  // balcony (a door opened through the table, a chair stood half in the wall - 29.10.2026)
+  for (const { apt, poly } of balconySets) {
+    const t = balconyFurniture(k, M, poly, keepout);
+    if (t && walk === apt) addOutline([[t[0] - 0.36, t[1] - 0.36], [t[0] + 0.36, t[1] - 0.36], [t[0] + 0.36, t[1] + 0.36], [t[0] - 0.36, t[1] + 0.36]], 'table');
   }
 
   // ---- furniture and fittings: as drawn; the rooms the drawing leaves empty, furnished here ----
@@ -1089,6 +1110,7 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     plan,
     lights: lightObjects,
     obstacles,
+    pieces: k.rec?.map(({ what, hull, y0, y1 }) => ({ what, hull, y0, y1 })) ?? null, // (RECORD.pieces: every piece as built)
     segments, // collision lines in plan coordinates (for the checks in tools/)
     notes, // rooms where something could not be fitted (for the checks in tools/)
     doors: doors.length,
@@ -1325,17 +1347,24 @@ function radiator(k, M, a, b, n, len) {
 }
 
 /** sheer curtains gathered at both ends of a window, on a ceiling track */
-function curtains(k, M, a, b, n, H, len) {
+function curtains(k, M, a, b, n, H, len, solid = null) {
   const off = 0.13;
   slab(k, M.blackMetal, a, b, n, off - 0.015, 0.03, H - CEIL - 0.035, H - CEIL - 0.005, 0.3);
   const u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
   const facing = Math.atan2(n[1], n[0]);
   const cw = Math.min(0.55, len * 0.3);
   for (const [p, s] of [[a, -1], [b, 1]]) {
-    // centre of the gathered panel: half on the wall beside the window, half over the glass
-    const c = [p[0] + u[0] * s * 0.08 + n[0] * off, p[1] + u[1] * s * 0.08 + n[1] * off];
-    k.at(c[0], c[1], facing);
-    F.curtain(k, M.sheer, cw, H - 0.05, 0.015);
+    // centre of the gathered panel: half on the wall beside the window, half over the glass; slid
+    // over the glass where the wall beside it stands out into the room (a column at Б's corner
+    // window: the curtain hung inside it - 29.10.2026)
+    for (let e = 0.08; e >= -cw / 2; e -= 0.02) {
+      const c = [p[0] + u[0] * s * e + n[0] * off, p[1] + u[1] * s * e + n[1] * off];
+      const fp = footprint([c[0] - n[0] * 0.03, c[1] - n[1] * 0.03], facing, cw, 0, 0.06);
+      if (solid && inSolidInset(solid, fp, 0.005)) continue;
+      k.at(c[0], c[1], facing);
+      F.curtain(k, M.sheer, cw, H - 0.05, 0.015);
+      break;
+    }
   }
 }
 
@@ -1362,7 +1391,7 @@ function curtainWall(k, M, a, b, n, H) {
 }
 
 /** mullions and rails along floor-to-ceiling glazing (also curved) */
-function glazingFrame(k, M, poly, H, roomOf, fitted, glassAt) {
+function glazingFrame(k, M, poly, H, roomOf, fitted, glassAt, solid = null) {
   // split the outline at its two farthest points into the two faces, keep the face inside
   let i0 = 0, i1 = 0, best = -1;
   for (let i = 0; i < poly.length; i++) for (let j = i + 1; j < poly.length; j++) {
@@ -1420,8 +1449,7 @@ function glazingFrame(k, M, poly, H, roomOf, fitted, glassAt) {
       if (nb && nb.poly !== poly) continue;
       const n = inward(p, q), L = dist(p, q), ux = (q[0] - p[0]) / L, uy = (q[1] - p[1]) / L;
       const c = [p[0] + ux * 0.3 + n[0] * 0.16, p[1] + uy * 0.3 + n[1] * 0.16];
-      k.at(c[0], c[1], Math.atan2(n[1], n[0]));
-      F.curtain(k, M.sheer, 0.55, H - 0.05, 0.015);
+      hangCurtain(k, M, solid, c, Math.atan2(n[1], n[0]), [ux, uy], 0.55, H);
     }
   }
 }
@@ -1635,7 +1663,11 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
     return [0, 0];
   };
   const moved = (p, sh) => [p[0] + sh[0], p[1] + sh[1]];
-  for (const it0 of mergedTables(apt.data.furniture ?? [], rect)) {
+  // (the WC and the basin after the bath, the shower and the worktop: they keep clear of those)
+  const later = { toilet: 2, basin: 1 };
+  const placedWet = [];
+  const seats = []; // every chair placed in the flat (dining and desk chairs: none into another)
+  for (const it0 of mergedTables(apt.data.furniture ?? [], rect).sort((a, b) => (later[a.type] ?? 0) - (later[b.type] ?? 0))) {
     let it = it0;
     // (pieces with a back: their back on the wall's face first, then out of any wall they still reach)
     if (it.c && it.f !== undefined && it.w && it.type !== 'bed') {
@@ -1650,6 +1682,10 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
       for (let n = 0; n < 6 && !['toilet', 'basin'].includes(it.type) && !clearOf([footprint(backOf(it, dd), it.f, it.w, 0, dd)]); n++) {
         if (deep) dd *= 0.98;
         it = { ...it, w: it.w * 0.98, ...(deep ? { d: dd } : {}) };
+        // (and moved along its wall again at each step: a TV unit run into a wall's jog at one end
+        // is freed by sliding it a few centimetres, not only by narrowing it)
+        const sh2 = settle([footprint(backOf(it, dd), it.f, it.w, 0, dd)], it.f);
+        if (sh2[0] || sh2[1]) it = { ...it, c: moved(it.c, sh2) };
       }
     } else if (it.type === 'bed') {
       const p = backOf(it, it.l);
@@ -1696,9 +1732,20 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
         break;
       }
       case 'toilet': {
-        const p = backOf(it), w = Math.max(it.w, 0.5);
+        const p = backOf(it);
+        // (the model's boxing is half a metre wide; the drawn width where that reaches into the
+        // basin, the shower or the bath beside it)
+        const wide = footprint(p, it.f, Math.max(it.w, 0.5), 0, it.d);
+        const w = placedWet.some((q) => overlaps(q, wide)) || out.solids.some((q) => overlaps(q.poly, wide)) ? Math.max(it.w, 0.38) : Math.max(it.w, 0.5);
+        // the paper holder on the side that is free (it stood in the shower, the bath or the basin
+        // beside the WC - 29.10.2026), none where neither is
+        const bw = Math.min(w, 0.6);
+        const holder = [1, -1].find((s) => {
+          const hp = footprint(p, it.f, 0.16, 0.08, 0.2).map(([x, y]) => [x + -Math.sin(it.f) * s * (bw / 2 + 0.08), y + Math.cos(it.f) * s * (bw / 2 + 0.08)]);
+          return !inSolidInset(solid, hp, 0.01) && !placedWet.some((q) => overlaps(q, hp)) && !out.solids.some((q) => overlaps(q.poly, hp));
+        }) ?? 0;
         k.at(p[0], p[1], it.f);
-        F.toilet(k, M, w, it.d, H);
+        F.toilet(k, M, w, it.d, H, holder);
         keepout.push(footprint(p, it.f, w, 0, it.d));
         break;
       }
@@ -1707,6 +1754,7 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
         k.at(p[0], p[1], it.f);
         F.vanity(k, M, w, H, 1, d);
         keepout.push(footprint(p, it.f, w, 0, d));
+        placedWet.push(footprint(p, it.f, w, 0, d));
         break;
       }
       case 'bath': {
@@ -1727,9 +1775,16 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
         k.at(it.c[0], it.c[1], it.a - Math.PI / 2);
         F.diningTable(k, M, it.w, it.d);
         piece(rect(it.c, it.w, it.d, it.a), 2, 'table');
-        // the chairs as drawn, pushed in a little under the table (the drawing shows their backs)
+        // the chairs as drawn: the chair's middle where the drawing has it (it pushed them 10 cm
+        // further in, under the top - 29.10.2026); none into a chair already standing (two drawn
+        // chairs at a corner overlapping)
         for (const [x, y, f] of it.chairs) {
-          k.at(x - Math.cos(f) * 0.125, y - Math.sin(f) * 0.125, f);
+          const c = [x, y], fp = footprint([x - Math.cos(f) * 0.23, y - Math.sin(f) * 0.23], f, 0.44, 0, 0.46);
+          if (seats.some((q) => overlaps(q, fp.map(([px, py]) => [px + (c[0] - px) * 0.12, py + (c[1] - py) * 0.12])))) continue;
+          // (nor in a door's swing: the leaf would open through it - flat 183)
+          if (keepout.some((q) => q.swing && overlaps(q, fp.map(([px, py]) => [px + (c[0] - px) * 0.1, py + (c[1] - py) * 0.1])))) continue;
+          seats.push(fp);
+          k.at(x - Math.cos(f) * 0.23, y - Math.sin(f) * 0.23, f);
           F.chair(k, M);
         }
         if (ceiling) {
@@ -1762,10 +1817,12 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
         // a shower tray with a glass screen on its open side (Regnum Plaza's sheets)
         const p = backOf(it);
         k.at(p[0], p[1], it.f);
+        k.begin('shower');
         k.box(M.ceramic, -it.w / 2, 0, 0, it.w / 2, 0.06, it.d);
         k.box(M.showerGlass, -it.w / 2, 0.06, it.d - 0.012, it.w / 2, 2.0, it.d);
         k.box(M.chrome, -0.02, 1.88, 0.02, 0.02, 1.92, 0.32);
         k.box(M.chrome, -0.1, 1.86, 0.25, 0.1, 1.88, 0.42);
+        k.end();
         piece(footprint(p, it.f, it.w, 0, it.d), 3, 'shower');
         break;
       }
@@ -1775,7 +1832,11 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
         k.at(p[0], p[1], it.f);
         F.desk(k, M, it.w, it.d);
         piece(footprint(p, it.f, it.w, 0, it.d), 1, 'desk');
+        // (its drawn chairs: none into another - the chairs of two desks back to back overlapped, V25)
         for (const [x, y, f] of it.chairs ?? []) {
+          const fp = footprint([x - Math.cos(f) * 0.23, y - Math.sin(f) * 0.23], f, 0.44, 0, 0.46);
+          if (seats.some((q) => overlaps(q, fp))) continue;
+          seats.push(fp);
           k.at(x - Math.cos(f) * 0.23, y - Math.sin(f) * 0.23, f);
           F.chair(k, M);
         }
@@ -2025,7 +2086,7 @@ function furnish(ctx) {
   if (room._wet) return bathroom(ctx);
   if (room.kind === 'loggia' || room.kind === 'terrace') {
     // a loggia: a small table with two chairs where it is wide enough, else left clear
-    if (!ctx.sparse && room.area >= 3.5) balconyFurniture(k, M, room.poly);
+    if (!ctx.sparse && room.area >= 3.5) balconyFurniture(k, M, room.poly, ctx.keepout);
     return;
   }
   const r = innerRect(room.poly, 0.06);
@@ -2365,7 +2426,9 @@ function bathroom(ctx) {
     fitAlong(ctx, sides, { minW: 1.6, maxW: 1.7, depth: 0.72, clear: 0 }, (w) => F.bathtub(k, M, w, 0.72, 1));
   }
   if (!drawn.has('basin')) fitAlong(ctx, sides, { minW: 0.55, maxW: 0.8, depth: 0.48, clear: 0.55 }, (w) => F.vanity(k, M, w, H, 1, 0.48));
-  if (!drawn.has('toilet')) fitAlong(ctx, sides, { minW: 0.5, maxW: 0.5, depth: 0.68, clear: 0.5 }, () => F.toilet(k, M, 0.5, 0.68, H));
+  // (no paper holder on a WC placed here: it is not known what stands beside it - the holder stood in
+  // the drawn shower or bath beside it, 29.10.2026)
+  if (!drawn.has('toilet')) fitAlong(ctx, sides, { minW: 0.5, maxW: 0.5, depth: 0.68, clear: 0.5 }, () => F.toilet(k, M, 0.5, 0.68, H, 0));
   // towel rail on a free wall, a bath mat
   const spot = bestWall(sides, 0.7);
   if (spot) place(ctx, spot.s, (spot.f.t0 + spot.f.t1) / 2, 0.6, 0.12, () => F.towelRail(k, M), { collide: false });
@@ -2376,17 +2439,67 @@ function bathroom(ctx) {
   }
 }
 
-function balconyFurniture(k, M, poly) {
-  const [x, y] = interiorPoint(poly);
-  if (distToPolygon(poly, x, y) > 0) return null;
+// a gathered curtain hung at c facing f, slid along u (towards the glass) by up to `reach` m where
+// the wall beside the glass stands out into the room and the curtain would hang inside it
+function hangCurtain(k, M, solid, c, f, u, w, H, reach = 0.4) {
+  const n = [Math.cos(f), Math.sin(f)];
+  for (let e = 0; e <= reach; e += 0.02) {
+    const p = [c[0] + u[0] * e, c[1] + u[1] * e];
+    const fp = footprint([p[0] - n[0] * 0.03, p[1] - n[1] * 0.03], f, w, 0, 0.06);
+    if (solid && inSolidInset(solid, fp, 0.005)) continue;
+    k.at(p[0], p[1], f);
+    F.curtain(k, M.sheer, w, H - 0.05, 0.015);
+    return true;
+  }
+  return false;
+}
+
+// the distance from a point inside a polygon to its edge
+const edgeDist = (p, x, y) => Math.min(...p.map((q, i) => distToSegment(x, y, ...p[(i + p.length - 1) % p.length], ...q).d));
+
+function balconyFurniture(k, M, poly, keep = []) {
+  // the set: a round table 0.64 m across, a chair on each side 0.65 m off its middle (a 1.9 x 0.7 m
+  // box), turned along the balcony's long side; the spot nearest the balcony's middle where all of
+  // it stands on the balcony, 5 cm off its edges, and clear of the door swings
+  const [mx, my] = interiorPoint(poly);
+  let best = null;
+  const xs = poly.map((p) => p[0]), ys = poly.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const along = x1 - x0 >= y1 - y0 ? 0 : Math.PI / 2;
+  // (two chairs: the box 1.9 m long; one chair: 1.25 m, the table's middle 0.33 m off the box's)
+  const box = (x, y, a, n) => {
+    const u = [Math.cos(a), Math.sin(a)], v = [-u[1], u[0]], L = n === 2 ? 0.95 : 0.625, o = n === 2 ? 0 : 0.325;
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [x + u[0] * (i * L + o) + v[0] * j * 0.35, y + u[1] * (i * L + o) + v[1] * j * 0.35]);
+  };
+  for (const n of [2, 1]) {
+    for (const a of [along, along + Math.PI / 2, along + Math.PI, along + (3 * Math.PI) / 2]) {
+      for (let x = x0; x <= x1; x += 0.1) {
+        for (let y = y0; y <= y1; y += 0.1) {
+          const b = box(x, y, a, n);
+          if (!b.every(([px, py]) => inside(poly, px, py) && edgeDist(poly, px, py) >= 0.05)) continue;
+          if (keep.some((q) => overlaps(q, b))) continue;
+          const d = Math.hypot(x - mx, y - my) + ((a - along) % Math.PI === 0 ? 0 : 0.5);
+          if (!best || d < best.d) best = { x, y, a, n, d };
+        }
+      }
+    }
+    if (best) break;
+  }
+  if (!best) return null;
+  const { x, y, a, n } = best;
   k.at(x, y, 0);
+  k.begin('balconyTable');
   k.cyl(M.blackMetal, 0, 0, 0, 0.2, 0.01, 20);
   k.cyl(M.blackMetal, 0, 0, 0, 0.02, 0.72, 10);
   k.cyl(M.oak, 0, 0.72, 0, 0.32, 0.75, 32);
-  for (const dx of [-0.65, 0.65]) {
-    if (!inside(poly, x + dx, y)) continue;
-    k.at(x + dx, y, dx > 0 ? Math.PI : 0).offset(0, -0.25);
+  k.end();
+  for (const s of n === 2 ? [-1, 1] : [1]) {
+    const cx = x + Math.cos(a) * s * 0.65, cy = y + Math.sin(a) * s * 0.65;
+    // (the chair faces the table: its back 0.25 m beyond its middle)
+    const f = Math.atan2(-Math.sin(a) * s, -Math.cos(a) * s);
+    k.at(cx - Math.cos(f) * 0.25, cy - Math.sin(f) * 0.25, f);
     F.chair(k, M);
   }
+  keep.push(box(x, y, a, n));
   return [x, y];
 }

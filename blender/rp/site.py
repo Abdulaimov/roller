@@ -1,9 +1,11 @@
-"""Round the complex: the two streets it stands on (кӯчаи И. Нарзиқулова along Б and В, кӯчаи
-Ш. Ҳусейнзода along Б and А, with the parking bays along the pavement as on the developer's model),
-the courtyard inside the L of the blocks (paved plaza, lawns with trees, a playground, two pergolas,
-the drive round it), and the neighbourhood from OpenStreetMap (blender/rp/osm.json): the houses with
-their storeys, the roads; across кӯчаи Ҳусейнзода the maternity hospital № 2 (Таваллудхонаи № 2,
-a cream two-storey house with a four-storey wing), the school № 20 further on.
+"""Round the complex: the two streets it stands on as the developer's «Схема блокировки» draws them
+(кӯчаи И. Нарзиқулова along Б and В, кӯчаи Ш. Ҳусейнзода along Б and А: their kerbs, the lay-bys
+along the pavement, the drive down into the basement at В's west end), the courtyard inside the L of
+the blocks as renders 5 and 8 show it (a drive along the blocks' yard faces past the doors, the yard
+with its play zones, pergolas, fountains, planters and trees), the scheme's three houses (the
+four-storey shopping centre of render 7 and two twelve-storey houses), and the neighbourhood from
+OpenStreetMap (blender/rp/osm.json): the houses with their storeys, the roads; across кӯчаи
+Ҳусейнзода the maternity hospital № 2, the school № 20 further on.
 
 Levels: roads 0, pavements and paving +0.12, lawns +0.15 behind a kerb, play surface +0.13.
 Returns what the viewer needs: trees, cars, people, lamps, benches, labels, the walk map.
@@ -24,7 +26,7 @@ from ab import landscape as LS
 from ab.site import bench, lamp, lawn_mask
 from complex.geom import MeshBuilder, log_tree, make_object
 
-from .config import HERE, sheet_to_site
+from .config import HERE, RAMP_X, sheet_to_site
 
 Z = dict(asphalt=0.0, paving=0.12, lawn=0.15, play=0.13)
 
@@ -53,50 +55,64 @@ def raised(mb, g, z, top, side='Kerb'):
             mb.prism(q, 0.0, z, side, top)
 
 
+# the developer's «Схема блокировки» (on every plan sheet), read off the vector drawing of sheet 17
+# and fitted to the blocks (2.2442 m a point, Б's centre at the scheme's (115.835, 744.41) pt): the
+# kerbs of the two streets at the corner, their lay-bys, the drive down into the basement at В's
+# west end, the doors the arrows point at (sheet metres). (Its кӯчаи Шевченко is OSM's кӯчаи
+# С.Абдуллоев to 10-15 m, the neighbourhood from OSM agrees with the scheme round the block.)
+NARZ = (30.9, 38.7)                  # кӯчаи И. Нарзиқулова: its kerbs (sheet y)
+HUSZ = (30.1, 41.9)                  # кӯчаи Ш. Ҳусейнзода: its kerbs (sheet x)
+NARZ_BAY = [(-57.7, 24.7), (4.2, 24.7), (1.5, 30.9), (-60.4, 30.9)]
+HUSZ_BAY = [(23.6, -47.5), (23.6, 14.2), (30.1, 16.4), (30.1, -45.0)]
+RAMP = RAMP_X                        # the drive into the basement through В's west end (config)
+DOORS = [(-50.2, -11.6), (-38.1, -11.6), (-16.0, -13.0), (-11.5, -19.0)]
+# the courtyard drive (renders 5 and 8): along В's and А's yard faces past the doors, west to the
+# lane behind В (OSM's service road at x -94) and out to кӯчаи Ҳусейнзода south of А; 6.5 m with a
+# dashed centre line, a 4 m pavement at the doors (sheet boxes x0, y0, x1, y1)
+DRIVE = [(-96.0, -22.1, -15.5, -15.6), (-22.0, -58.5, -15.5, -15.6), (-22.0, -58.5, HUSZ[0], -52.0)]
+WALKS = [(-78.0, -15.6, -15.5, -11.6), (-15.5, -52.0, -11.4, -15.6), (-15.5, -52.0, 19.3, -47.8)]
+
 def build_site(mats, col, towers, podium_o):
     rnd = random.Random(11)
     LS.walk_reset()
     mb = MeshBuilder()
     trees, cars, people, benches, labels = [], [], [], [], []
+    notes = []   # what could not be placed as the renders have it (printed, README)
     osm = json.load(open(os.path.join(HERE, 'osm.json')))
-    # the three houses inside the block where the developer's «Схема блокировки» puts them (every
-    # sheet; read off the vector schema, fitted to the blocks to 0.14 m): the four-storey shopping
-    # centre of render 7 and two twelve-storey houses (their storeys from OSM, their places off by
-    # up to 20 m there)
+    # the three houses inside the block where the scheme puts them: the four-storey shopping centre
+    # of render 7 and two twelve-storey houses
     schema = json.load(open(os.path.join(HERE, 'schema_neighbours.json')))
     schema_g = [Polygon(q['ring']).buffer(0) for q in schema]
     schema_all = unary_union(schema_g)
 
-    # ---------------- the plot and its two streets (sheet frame: x along Нарзиқулова, y along Ҳусейнзода)
+    # ---------------- the streets (the scheme): the carriageways, the lay-bys, the pavements
     px0, py0, px1, py1 = podium_bounds(podium_o)
-    # кӯчаи И. Нарзиқулова: pavement 4.5 m, parking bays 5.5 m, the road 10 m, pavement 5 m
-    n_pav = (px0 - 60, py1, px1 + 60, py1 + 4.5)
-    n_bay = (px0 - 6, py1 + 4.5, px1 - 2, py1 + 10.0)
-    n_road = (-400, py1 + 4.5, 400, py1 + 18.0)
-    n_far = (-400, py1 + 18.0, 400, py1 + 21.0)
-    # кӯчаи Ш. Ҳусейнзода: the same along the east side, a wider road (12 m)
-    e_pav = (px1, py0 - 60, px1 + 4.5, py1 + 4.5)
-    e_bay = (px1 + 4.5, py0 + 4, px1 + 10.0, py1 - 2)
-    e_road = (px1 + 4.5, -400, px1 + 22.0, 400)
-    e_far = (px1 + 22.0, -400, px1 + 27.0, 400)
-    roads = unary_union([SB(*n_road), SB(*e_road)])
-    bays = unary_union([SB(*n_bay), SB(*e_bay)])
-    # the plot: from the streets to 64 m south of Нарзиқулова's pavement, 14 m west of block В
-    plot = SB(px0 - 14, py0 - 30, px1, py1)
-    courtyard = plot.difference(podium_o)
-    # the drive round the courtyard (west and south edges), with bays
-    drive = SB(px0 - 14, py0 - 30, px0 - 8, py1).union(SB(px0 - 14, py0 - 30, px1, py0 - 24))
-    drive_bays = SB(px0 - 8, py0 - 24, px0 - 2.5, py0 + 30).union(SB(px0 + 4, py0 - 24, px1 - 30, py0 - 18.5))
-    # (the schema's houses stand where the drive's south arm ran: a drive round them instead, the
-    # courtyard ending at it - renders 5 and 8)
-    ring_drive = schema_all.buffer(7.5, join_style='mitre').intersection(plot).difference(podium_o.buffer(3.0)).difference(schema_all.buffer(0.3))
-    drive = drive.difference(schema_all.buffer(1.0)).union(ring_drive)
-    drive_bays = drive_bays.difference(schema_all.buffer(8.0))
-    yard = courtyard.difference(drive).difference(drive_bays).difference(schema_all.buffer(7.5, join_style='mitre'))
-    pav = unary_union([SB(*n_pav), SB(*e_pav), SB(*n_far), SB(*e_far)]).difference(roads.union(bays))
-    pav = pav.union(plot.difference(drive).difference(drive_bays).difference(podium_o).intersection(podium_o.buffer(3.0)))
+    n_road = SB(-420, NARZ[0], 420, NARZ[1])
+    e_road = SB(HUSZ[0], -420, HUSZ[1], 420)
+    roads = unary_union([n_road, e_road])
+    bays = unary_union([SP(NARZ_BAY), SP(HUSZ_BAY)])
+    # the drive down into the basement: across the pavement to the ramp's door in the podium
+    ramp_drive = SB(RAMP[0], py1 - 0.5, RAMP[1], NARZ[0])
+    n_pav = SB(px0 - 60, py1, px1 + 60, NARZ[0]).difference(bays).difference(ramp_drive)
+    e_pav = SB(px1, py0 - 60, HUSZ[0], NARZ[0]).difference(bays)
+    n_far = SB(px0 - 60, NARZ[1], px1 + 60, NARZ[1] + 5.0)
+    e_far = SB(HUSZ[1], py0 - 60, HUSZ[1] + 5.0, py1 + 60)
+    # the plot: the podium, the courtyard and its drive, between the scheme's houses and the streets
+    drive = unary_union([SB(*b) for b in DRIVE])
+    walks = unary_union([SB(*b) for b in WALKS]).difference(podium_o)
+    plot = unary_union([SB(-96.0, -64.0, px1, py1), SB(-22.0, -58.5, HUSZ[0], -47.8)])
+    yard = SB(-76.0, -64.0, -22.0, -22.1).difference(schema_all.buffer(4.0, join_style='mitre')).difference(podium_o.buffer(0.5))
+    yard = max(parts(yard), key=lambda q: q.area)
+    # the rest of the plot round the scheme's houses: paved
+    pav = unary_union([n_pav, e_pav, walks, n_far, e_far]).difference(roads.union(bays)).difference(podium_o)
+    # the rest of the plot (behind В's west end, between the yard and the scheme's houses): lawns with
+    # trees inside a paved rim 2 m wide, not one paved field (renders 5 and 8 have no bare plaza)
+    rest = plot.difference(podium_o).difference(drive).difference(yard).difference(schema_all.buffer(0.3)).difference(roads).difference(pav)
+    green = unary_union([q.buffer(-2.0, join_style='mitre') for q in parts(rest) if q.area > 40])
+    green = unary_union([q for q in parts(green) if q.area > 12]) if not green.is_empty else Polygon()
+    pav = pav.union(rest.difference(green))
 
-    # ---------------- the neighbourhood's roads (OSM), with pavements
+    # ---------------- the neighbourhood's roads (OSM), with pavements; none in the block
     city_roads = []
     for r in osm['roads']:
         ln = LineString(r['line'])
@@ -105,22 +121,23 @@ def build_site(mats, col, towers, podium_o):
     region = Point(0, 0).buffer(560)
     city_roads = city_roads.intersection(region).difference(plot.buffer(1))
     city_pav = city_roads.buffer(2.6).difference(city_roads).difference(plot.buffer(1)).intersection(region)
-    asphalt = unary_union([roads, bays, drive, drive_bays, city_roads]).intersection(region)
+    asphalt = unary_union([roads, bays, drive, ramp_drive, city_roads]).intersection(region)
 
     # ---------------- the neighbours' houses
     houses = []
     tones = ['Neighbour cream', 'Neighbour solid', 'Neighbour peach', 'Neighbour solid', 'Neighbour cream', 'Neighbour blue', 'Neighbour rose']
     hb = MeshBuilder()
-    roddom_parts, school = [], None
+    streets_all = unary_union([roads, bays, n_pav, e_pav])
     for i, bld in enumerate(osm['buildings']):
         g = Polygon(bld['ring']).buffer(0)
         if g.is_empty or not region.contains(g.centroid):
             continue
         g = g.simplify(0.3)
-        if g.intersects(plot.buffer(2)) or g.intersects(schema_all.buffer(3)):
+        # (none on the plot or the scheme's houses and streets)
+        if g.intersects(plot.buffer(2)) or g.intersects(schema_all.buffer(3)) or g.intersection(streets_all).area > 1.0:
             continue
-        if g.intersects(roads):
-            g = g.difference(roads.buffer(3.5))
+        if g.intersects(city_roads):
+            g = g.difference(city_roads.buffer(3.5))
             g = max(parts(g), key=lambda q: q.area) if parts(g) else Polygon()
             if g.area < 60:
                 continue
@@ -135,12 +152,9 @@ def build_site(mats, col, towers, podium_o):
             mat = tones[i % len(tones)]
         h = 3.1 * lv + 0.6
         hb.prism(g, -0.3, h, mat, 'Roof')
-        # a parapet and a little height on the roof
         if g.area > 80:
             hb.prism(g.exterior.buffer(0.15).intersection(g), h, h + 0.7, mat, 'Roof')
         houses.append(g)
-    # the maternity hospital and the school: the houses round their OSM points
-    places = {p['kind'] + ':' + p['name']: p for p in osm['places']}
     for p in osm['places']:
         pt = Point(*p['at'])
         near = [g for g in houses if g.distance(pt) < 25]
@@ -166,136 +180,188 @@ def build_site(mats, col, towers, podium_o):
     mb.polygon_face(region.buffer(400).difference(region), -0.05, 'Ground')
     lawn_city = base.difference(city_pav).difference(pav).difference(plot).difference(unary_union(houses).buffer(0.5) if houses else Polygon())
     raised(mb, lawn_city, Z['lawn'] - 0.05, 'Lawn')
-    raised(mb, city_pav.difference(asphalt), Z['paving'], 'Sidewalk')
-    raised(mb, pav, Z['paving'], 'Paving')
+    raised(mb, city_pav.difference(asphalt).difference(pav), Z['paving'], 'Sidewalk')
+    raised(mb, pav.difference(yard), Z['paving'], 'Paving')
+    raised(mb, green, Z['lawn'], 'Lawn')
+    for q in parts(green):
+        for k in range(max(1, int(q.area / 70))):
+            p = rand_in(q.buffer(-1.5), rnd)
+            if p is not None:
+                log_tree(mb, p.x, p.y, Z['lawn'], rnd.uniform(6.0, 9.0), rnd.uniform(2.0, 3.0), 'broad')
+                trees.append((p.x, p.y))
+                LS.WALK['posts'].append([p.x, p.y, 0.35])
     mb.polygon_face(asphalt, 0.0, 'Asphalt')
-    # road markings: the centre lines of the two streets, the bays
-    for (a, b) in [((-380, py1 + 13.5), (380, py1 + 13.5)), ((px1 + 13.25, -380), (px1 + 13.25, 380))]:
+    # road markings: the centre lines of the streets and of the courtyard's drive (dashed)
+    for (a, b) in [((-380, sum(NARZ) / 2), (380, sum(NARZ) / 2)), ((sum(HUSZ) / 2, -380), (sum(HUSZ) / 2, 380)),
+                   ((-94.0, -18.85), (-18.75, -18.85)), ((-18.75, -18.85), (-18.75, -55.25)), ((-18.75, -55.25), (HUSZ[0] - 1, -55.25))]:
         A, B = S(*a), S(*b)
         L = math.dist(A, B)
+        if L < 1:
+            continue
         u = ((B[0] - A[0]) / L, (B[1] - A[1]) / L)
         for k in range(int(L / 6)):
             c = (A[0] + u[0] * (k * 6 + 1.5), A[1] + u[1] * (k * 6 + 1.5))
-            if plot.buffer(-0.5).contains(Point(c)):
+            if not asphalt.contains(Point(c)):
                 continue
             mb.box(c[0], c[1], 0.005, 3.0, 0.14, 0.01, 'Road line', rot=math.atan2(u[1], u[0]))
-    # ---------------- the courtyard (render 8): beige and grey pavers, blue rubber play zones with
-    # their equipment, two pergolas over timber decks, two square fountains, a round planter ringed
-    # by a timber bench, round lawns with a tree, trees in white pots, cypresses along the drive
-    plaza = yard.buffer(-0.01)
-    raised(mb, plaza, Z['paving'], 'Paving')
-    X0, Y0, X1, Y1 = affinity.rotate(yard, 49.5, origin=(0, 0)).bounds   # in the sheet's frame
-    inside = yard.buffer(-2.5)
-    gx0, gy0, gx1, gy1 = inside.bounds
-    grid = [(x, y) for x in np.arange(gx0, gx1, 1.0) for y in np.arange(gy0, gy1, 1.0) if inside.contains(Point(x, y))]
-    mid = inside.centroid
-    taken = []
-    R = lambda x, y, w, d: affinity.rotate(box(x - w / 2, y - d / 2, x + w / 2, y + d / 2), -49.5, origin=(x, y))
 
-    def spot(w, d, gap=1.5):
-        """where a w x d piece (square to the blocks) fits in the courtyard clear of what is there,
-        as far from it as it can be: render 8's pieces stand spread over the yard"""
-        occ = unary_union(taken) if taken else None
-        best, score = None, None
-        for (x, y) in grid:
-            foot = R(x, y, w, d)
-            if not inside.contains(foot) or (occ is not None and foot.buffer(gap).intersects(occ)):
-                continue
-            sc = occ.distance(Point(x, y)) if occ is not None else -mid.distance(Point(x, y))
-            if score is None or sc > score:
-                best, score = (x, y), sc
-        return best
-    # the blue rubber play zones, the bigger one with its equipment
+    # ---------------- the courtyard (renders 5 and 8; no landscaping plan in the book, the pieces
+    # where render 8 shows them, read off the render by eye - the camera looks east along В's yard face):
+    # beige and grey pavers, three blue rubber play zones with their equipment, two pergolas over
+    # timber decks, two square fountains, the white box at the drive (the basement's stair), a round
+    # planter ringed by a timber bench, round lawns with a tree, trees in white pots, cypresses along
+    # the drive, low planters with shrubs along the south edge
+    raised(mb, yard.buffer(-0.01), Z['paving'], 'Paving')
+    taken = []
+    R = lambda x, y, w, d: SP([(x - w / 2, y - d / 2), (x + w / 2, y - d / 2), (x + w / 2, y + d / 2), (x - w / 2, y + d / 2)])
+
+    def put(name, x, y, w, d, gap=1.0):
+        """the piece where the render has it, or the nearest place within 4 m it fits (inside the
+        yard, clear of the pieces placed before it)"""
+        inner = yard.buffer(-0.6)
+        occ = unary_union(taken) if taken else Polygon()
+        for r in range(0, 9):
+            for ex, ey in [(0, 0)] if r == 0 else [(r * 0.5, 0), (-r * 0.5, 0), (0, r * 0.5), (0, -r * 0.5), (r * 0.35, r * 0.35), (-r * 0.35, r * 0.35), (r * 0.35, -r * 0.35), (-r * 0.35, -r * 0.35)]:
+                foot = R(x + ex, y + ey, w, d)
+                if inner.contains(foot) and not foot.buffer(gap).intersects(occ):
+                    if r:
+                        notes.append(f'{name}: moved {math.hypot(ex, ey):.1f} m from where render 8 has it')
+                    taken.append(foot)
+                    return x + ex, y + ey, foot
+        notes.append(f'{name}: no room, left out')
+        return None
     plays = []
 
-    def play_zone(w, d):
-        c = spot(w, d)
-        if c:
-            q = R(c[0], c[1], w, d).buffer(-1.5).buffer(1.5)
+    def play_zone(name, x, y, w, d):
+        got = put(name, x, y, w, d)
+        if got:
+            q = got[2].buffer(-1.2).buffer(1.2)
             plays.append(q)
-            taken.append(q)
             raised(mb, q, Z['play'], 'Play orange')
             LS.playground(mb, q, Z['play'], rnd, people)
-    play_zone(13.0, 9.0)
-    # two pergolas over timber decks
-    for _ in range(2):
-        c = spot(7.4, 4.6, 1.2)
-        if c:
+    play_zone('the big play zone', -57.0, -35.0, 13.0, 8.5)
+    play_zone('the play zone at the pergolas', -41.0, -47.0, 10.0, 6.5)
+    play_zone('the play strip along the drive', -54.5, -25.6, 9.0, 4.4)
+    play = unary_union(plays) if plays else Polygon()
+    for name, (x, y) in (('the pergola by the inner corner', (-33.0, -28.5)), ('the pergola in the middle', (-46.5, -35.0))):
+        got = put(name, x, y, 7.4, 4.6, 1.2)
+        if got:
+            c = S(got[0], got[1])
             pergola(mb, c[0], c[1], Z['paving'], math.radians(-49.5))
-            LS.WALK['solids'].append(R(c[0], c[1], 7.0, 4.2).buffer(-0.3))
-            taken.append(R(c[0], c[1], 7.4, 4.6))
-    # two square fountains with three jets each
+            LS.WALK['solids'].append(got[2].buffer(-0.3))
     pools = []
-    for _ in range(2):
-        c = spot(4.0, 4.0, 2.0)
-        if not c:
+    for name, (x, y) in (('the fountain by the drive', (-45.0, -26.2)), ('the fountain in the south', (-56.0, -44.5))):
+        got = put(name, x, y, 4.0, 4.0, 1.5)
+        if not got:
             continue
-        q = R(c[0], c[1], 3.2, 3.2)
+        c = S(got[0], got[1])
+        q = R(got[0], got[1], 3.2, 3.2)
         mb.prism(q.buffer(0.35, join_style='mitre').difference(q), Z['paving'], Z['paving'] + 0.5, 'Stone dark', 'Stone dark')
         mb.polygon_face(q, Z['paving'] + 0.35, 'Pool water')
         for k in (-1, 0, 1):
             mb.box(c[0] + k * 0.75, c[1] + k * 0.2, Z['paving'] + 0.35, 0.06, 0.06, 1.1 - 0.3 * abs(k), 'Pool water')
         pools.append(q)
         LS.WALK['solids'].append(q.buffer(0.4))
-        taken.append(q.buffer(0.4))
     pool = unary_union(pools) if pools else Polygon()
-    play_zone(9.0, 6.5)
-    play = unary_union(plays) if plays else Polygon()
-    # the big round planter ringed by a timber bench
-    c = spot(5.4, 5.4, 2.0)
-    if c:
-        p = Point(c)
+    got = put('the white box (the basement stair)', -28.5, -41.0, 4.6, 4.6, 1.5)
+    if got:
+        mb.prism(got[2], Z['paving'], Z['paving'] + 3.6, 'Pilaster white', 'Pilaster white')
+        LS.WALK['solids'].append(got[2])
+    got = put('the round planter with its bench', -66.0, -43.0, 5.6, 5.6, 1.5)
+    if got:
+        p = Point(S(got[0], got[1]))
         mb.prism(p.buffer(2.6, quad_segs=24).difference(p.buffer(2.1, quad_segs=24)), Z['paving'], Z['paving'] + 0.45, 'Stone white', 'Wood')
         mb.prism(p.buffer(2.1, quad_segs=24), Z['paving'], Z['paving'] + 0.55, 'Stone white', 'Lawn')
-        log_tree(mb, c[0], c[1], Z['paving'] + 0.55, 7.5, 2.8, 'broad')
-        trees.append(c)
+        log_tree(mb, p.x, p.y, Z['paving'] + 0.55, 7.5, 2.8, 'broad')
+        trees.append((p.x, p.y))
         LS.WALK['solids'].append(p.buffer(2.65))
-        taken.append(p.buffer(2.7))
-    # round lawns with a tree in a white kerb
     islands = []
-    for _ in range(3):
-        c = spot(4.4, 4.4, 2.0)
-        if not c:
+    for name, (x, y) in (('the round lawn in the west', (-69.0, -33.0)), ('the round lawn in the middle', (-47.0, -41.5))):
+        got = put(name, x, y, 4.4, 4.4, 1.2)
+        if not got:
             continue
-        p = Point(c)
+        p = Point(S(got[0], got[1]))
         mb.prism(p.buffer(2.1, quad_segs=24).difference(p.buffer(1.9, quad_segs=24)), Z['paving'], Z['paving'] + 0.22, 'Stone white', 'Stone white')
         islands.append(p.buffer(1.9, quad_segs=24))
         log_tree(mb, p.x, p.y, Z['lawn'], rnd.uniform(5.5, 7.0), rnd.uniform(2.0, 2.6), 'broad')
         trees.append((p.x, p.y))
-        taken.append(p.buffer(2.2))
     lawn = unary_union(islands) if islands else Polygon()
     raised(mb, lawn, Z['lawn'] + 0.05, 'Lawn')
-    # trees in white round pots
-    for _ in range(8):
-        c = spot(1.4, 1.4, 1.8)
-        if not c:
+    for k, (x, y) in enumerate([(-62.0, -27.0), (-38.5, -33.0), (-27.0, -34.0), (-51.0, -40.5), (-63.0, -37.5), (-35.0, -52.0), (-30.0, -48.5), (-71.0, -40.0)]):
+        got = put(f'a tree in a pot ({k + 1})', x, y, 1.4, 1.4, 1.0)
+        if not got:
             continue
+        c = S(got[0], got[1])
         mb.prism(Point(c).buffer(0.62, quad_segs=16), Z['paving'], Z['paving'] + 0.55, 'Stone white', 'Mulch')
         log_tree(mb, c[0], c[1], Z['paving'] + 0.55, rnd.uniform(4.0, 5.2), rnd.uniform(1.3, 1.8), 'broad')
         trees.append(c)
         LS.WALK['solids'].append(Point(c).buffer(0.68))
-        taken.append(Point(c).buffer(0.7))
-    # cypresses in a row along the drive on the courtyard's far side (render 8, left)
-    A_, B_ = S(X0 + 1.4, Y0 + 2.0), S(X0 + 1.4, Y1 - 2.0)
-    L_ = math.dist(A_, B_)
-    for k in range(int(L_ / 3.6)):
-        t = (k + 0.5) * 3.6 / L_
-        x, y = A_[0] + (B_[0] - A_[0]) * t, A_[1] + (B_[1] - A_[1]) * t
-        if yard.buffer(-0.6).contains(Point(x, y)) and not any(g.buffer(1).contains(Point(x, y)) for g in taken):
-            log_tree(mb, x, y, Z['paving'], rnd.uniform(6.0, 7.2), 0.65, 'conifer')
-            trees.append((x, y))
-    # street trees: on the far pavements trees of the street (smaller than the old planes there,
-    # the renders keep the podium in view); on the podium's own pavements a low clipped hedge and
-    # narrow cypresses (renders 1 and 6)
-    for line, step, near in [(((px0 - 60, py1 + 19.6), (px1 + 120, py1 + 19.6)), 11.0, False), (((px1 + 25.2, py0 - 120), (px1 + 25.2, py1 + 60)), 11.0, False),
-                             (((px0 - 50, py1 + 3.6), (px1 - 4, py1 + 3.6)), 24.0, True), (((px1 + 3.6, py0 - 40), (px1 + 3.6, py1 - 4)), 24.0, True)]:
-        (a, b) = line
+    # cypresses in a planting strip along the drive (render 8: by the fountain and the play strip)
+    strip = SB(-72.0, -24.0, -30.0, -22.6).difference(unary_union(taken).buffer(0.8) if taken else Polygon())
+    for q in parts(strip):
+        if q.area < 2:
+            continue
+        mb.prism(q, Z['paving'], Z['paving'] + 0.35, 'Stone white', 'Mulch')
+        LS.WALK['solids'].append(q)
+        ln = LineString([S(-72.0, -23.3), S(-30.0, -23.3)])
+        for k in range(int(ln.length / 3.2)):
+            p = ln.interpolate((k + 0.5) * 3.2)
+            if q.buffer(-0.3).contains(p):
+                log_tree(mb, p.x, p.y, Z['paving'] + 0.35, rnd.uniform(5.8, 7.0), 0.65, 'conifer')
+                trees.append((p.x, p.y))
+    # planting beds by the pergolas and the play zones, and more trees in pots where there is room
+    # (render 8 has about thirty trees in the yard and green beds round the play areas)
+    for k, (x, y, w, d) in enumerate([(-38.5, -28.4, 4.0, 1.6), (-52.0, -35.0, 1.6, 4.0), (-46.5, -30.5, 4.0, 1.4), (-34.5, -45.5, 1.6, 4.0),
+                                     (-62.5, -31.0, 1.6, 4.0), (-50.0, -45.5, 4.0, 1.6), (-28.0, -46.5, 1.6, 4.0), (-70.0, -46.5, 4.0, 1.6)]):
+        got = put(f'a planting bed ({k + 1})', x, y, w, d, 0.8)
+        if not got:
+            continue
+        mb.prism(got[2], Z['paving'], Z['paving'] + 0.4, 'Stone white', 'Mulch')
+        mb.prism(got[2].buffer(-0.15), Z['paving'] + 0.4, Z['paving'] + 0.85, 'Shrub', 'Shrub')
+        c = S(got[0], got[1])
+        log_tree(mb, c[0], c[1], Z['paving'] + 0.4, rnd.uniform(4.2, 5.5), rnd.uniform(1.4, 1.9), 'broad')
+        trees.append(c)
+        LS.WALK['solids'].append(got[2])
+    extra = 0
+    for (x, y) in [(xx, yy) for yy in np.arange(-25.5, -60.0, -3.4) for xx in np.arange(-73.5, -24.0, 3.4)]:
+        if extra >= 14:
+            break
+        if rnd.random() < 0.45:
+            continue
+        foot = R(x, y, 1.4, 1.4)
+        occ = unary_union(taken) if taken else Polygon()
+        if not yard.buffer(-0.8).contains(foot) or foot.buffer(1.6).intersects(occ):
+            continue
+        taken.append(foot)
+        c = S(x, y)
+        mb.prism(Point(c).buffer(0.62, quad_segs=16), Z['paving'], Z['paving'] + 0.55, 'Stone white', 'Mulch')
+        log_tree(mb, c[0], c[1], Z['paving'] + 0.55, rnd.uniform(4.0, 5.2), rnd.uniform(1.3, 1.8), 'broad')
+        trees.append(c)
+        LS.WALK['solids'].append(Point(c).buffer(0.68))
+        extra += 1
+    notes.append(f'{extra} more trees in pots where the yard had room')
+    # low planters with shrubs along the yard's south edge (render 8, right)
+    for k, (x, y) in enumerate([(-36.0, -57.5), (-32.0, -57.5), (-28.0, -57.5), (-24.5, -57.5)]):
+        got = put(f'a shrub planter ({k + 1})', x, y, 3.0, 1.2, 0.6)
+        if got:
+            mb.prism(got[2], Z['paving'], Z['paving'] + 0.45, 'Stone white', 'Mulch')
+            mb.prism(got[2].buffer(-0.12), Z['paving'] + 0.45, Z['paving'] + 1.0, 'Shrub', 'Shrub')
+            LS.WALK['solids'].append(got[2])
+
+    # ---------------- street trees: on the far pavements trees of the street; on the podium's own
+    # pavements narrow cypresses and a low clipped hedge (renders 1, 4, 6)
+    for (a, b), step, near in [(((px0 - 60, NARZ[1] + 2.5), (px1 + 120, NARZ[1] + 2.5)), 11.0, False),
+                               (((HUSZ[1] + 2.5, py0 - 120), (HUSZ[1] + 2.5, py1 + 60)), 11.0, False),
+                               (((NARZ_BAY[3][0] - 2, 23.4), (NARZ_BAY[2][0] + 2, 23.4)), 12.0, True),
+                               (((22.4, HUSZ_BAY[0][1] - 2), (22.4, HUSZ_BAY[1][1] + 2)), 12.0, True)]:
         A, B = S(*a), S(*b)
         L = math.dist(A, B)
         for k in range(int(L / step)):
             t = (k + 0.5) * step / L
             x, y = A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t
-            if any(Polygon(t_['outline']).buffer(3).contains(Point(x, y)) for t_ in towers) or podium_o.buffer(2.5).contains(Point(x, y)):
+            P_ = Point(x, y)
+            if any(Polygon(t_['outline']).buffer(3).contains(P_) for t_ in towers) or podium_o.buffer(2.5).contains(P_) or asphalt.buffer(1.0).contains(P_) \
+                    or unary_union(houses).buffer(2.0).contains(P_):
                 continue
             if near:
                 log_tree(mb, x, y, Z['paving'], rnd.uniform(5.0, 6.5), rnd.uniform(0.6, 0.8), 'conifer')
@@ -303,71 +369,70 @@ def build_site(mats, col, towers, podium_o):
                 log_tree(mb, x, y, Z['paving'], rnd.uniform(8, 11), rnd.uniform(2.6, 3.6), 'broad')
             trees.append((x, y))
         if near:
-            # the hedge: 0.6 m wide, 0.8 m high, along the kerb side of the pavement
-            hedge = LineString([A, B]).buffer(0.3, cap_style=2).difference(podium_o.buffer(1.0))
+            hedge = LineString([A, B]).buffer(0.3, cap_style=2).difference(podium_o.buffer(1.0)).difference(asphalt.buffer(0.6))
             for t_ in towers:
                 hedge = hedge.difference(Polygon(t_['outline']).buffer(3))
             for q in getattr(hedge, 'geoms', [hedge]):
                 if q.geom_type == 'Polygon' and q.area > 0.5:
                     mb.prism(q, Z['paving'], Z['paving'] + 0.8, 'Shrub', 'Shrub')
                     LS.WALK['solids'].append(q.buffer(0.1))
-    # trees in the city's yards and along its pavements
+    # trees in the city's yards and along its pavements (OSM's lawns, none on the roads)
     for k in range(260):
         p = rand_in(lawn_city.intersection(Point(0, 0).buffer(420)), rnd)
-        if p is None or p.distance(plot) < 8:
+        if p is None or p.distance(plot) < 8 or asphalt.buffer(1.5).contains(p):
             continue
         log_tree(mb, p.x, p.y, Z['lawn'], rnd.uniform(8, 15), rnd.uniform(3, 5), 'broad' if rnd.random() < 0.85 else 'conifer')
-    # ---------------- lamps
-    for (a, b), step in [(((px0 - 40, py1 + 4.6), (px1 + 30, py1 + 4.6)), 24.0), (((px1 + 4.6, py0 - 60), (px1 + 4.6, py1 + 30)), 24.0)]:
+    # ---------------- lamps: along the podium's pavements and in the courtyard
+    for (a, b), step in [(((px0 - 40, NARZ[0] - 0.6), (px1 + 30, NARZ[0] - 0.6)), 24.0), (((HUSZ[0] - 0.6, py0 - 60), (HUSZ[0] - 0.6, py1 + 30)), 24.0)]:
         A, B = S(*a), S(*b)
         L = math.dist(A, B)
         u = ((B[0] - A[0]) / L, (B[1] - A[1]) / L)
         for k in range(int(L / step)):
             x, y = A[0] + u[0] * (k + 0.5) * step, A[1] + u[1] * (k + 0.5) * step
+            if asphalt.contains(Point(x, y)) or podium_o.buffer(0.5).contains(Point(x, y)):
+                continue
             nrm = math.atan2(-u[0], u[1])
             lamp(mb, x, y, Z['paving'], 8.0, street=True, rot=nrm)
-    for k in range(9):
-        p = rand_in(yard.buffer(-1.5).difference(lawn.buffer(1)).difference(play.buffer(1.5)), rnd)
+    for k in range(10):
+        p = rand_in(yard.buffer(-1.5).difference(unary_union(taken).buffer(1.2) if taken else Polygon()), rnd)
         if p is not None:
             lamp(mb, p.x, p.y, Z['paving'], 4.0)
-    # benches along the lawns
+    # benches round the lawns
     for g in islands:
         ring = g.buffer(0.9).exterior
         for k in range(max(1, int(ring.length / 12))):
             p = ring.interpolate((k + 0.5) * ring.length / max(1, int(ring.length / 12)))
             q = ring.interpolate(min(ring.length, ring.project(p) + 0.5))
             rot = math.atan2(q.y - p.y, q.x - p.x)
-            if play.buffer(2).contains(p):
+            if play.buffer(2).contains(p) or any(t_.contains(p) for t_ in taken):
                 continue
             bench(mb, p.x, p.y, Z['paving'], rot)
             benches.append([round(p.x, 2), round(p.y, 2), round(rot, 3)])
-    # ---------------- cars: in the bays (most of them), a few on the streets
-    for g, ang in [(SB(*n_bay), 90), (SB(*e_bay), 0), (drive_bays, None)]:
-        for q in parts(g):
-            r = q.minimum_rotated_rectangle
-            cs = list(r.exterior.coords)
-            e1 = (cs[1][0] - cs[0][0], cs[1][1] - cs[0][1])
-            e2 = (cs[2][0] - cs[1][0], cs[2][1] - cs[1][1])
-            if math.hypot(*e1) < math.hypot(*e2):
-                e1, e2 = e2, e1
-            L = math.hypot(*e1)
-            u = (e1[0] / L, e1[1] / L)
-            c0 = (cs[0][0], cs[0][1])
-            mid = r.centroid
-            nb = int(L / 2.6)
-            for k in range(nb):
-                x = mid.x + u[0] * ((k + 0.5) * 2.6 - nb * 1.3)
-                y = mid.y + u[1] * ((k + 0.5) * 2.6 - nb * 1.3)
-                # the bay's white line
-                v = (-u[1], u[0])
-                lx, ly = x - u[0] * 1.3, y - u[1] * 1.3
-                mb.box(lx, ly, 0.005, 0.1, 5.0, 0.01, 'Road line', rot=math.atan2(u[1], u[0]))
-                if rnd.random() < 0.72:
-                    rot = math.atan2(v[1], v[0]) + (math.pi if rnd.random() < 0.5 else 0)
-                    cars.append([round(x, 2), round(y, 2), 0.0, round(rot, 3), rnd.randrange(6)])
-    for (a, b) in [((-300, py1 + 11.6), (300, py1 + 11.6)), ((px1 + 10.2, -300), (px1 + 10.2, 300))]:
+    # ---------------- cars: in the lay-bys (across them), a few on the streets
+    for g in (SP(NARZ_BAY), SP(HUSZ_BAY)):
+        r = g.minimum_rotated_rectangle
+        cs = list(r.exterior.coords)
+        e1 = (cs[1][0] - cs[0][0], cs[1][1] - cs[0][1])
+        e2 = (cs[2][0] - cs[1][0], cs[2][1] - cs[1][1])
+        if math.hypot(*e1) < math.hypot(*e2):
+            e1, e2 = e2, e1
+        L = math.hypot(*e1)
+        u = (e1[0] / L, e1[1] / L)
+        mid = r.centroid
+        nb = int(L / 2.6)
+        for k in range(nb):
+            x = mid.x + u[0] * ((k + 0.5) * 2.6 - nb * 1.3)
+            y = mid.y + u[1] * ((k + 0.5) * 2.6 - nb * 1.3)
+            if not g.buffer(0.2).contains(Point(x, y)):
+                continue
+            v = (-u[1], u[0])
+            lx, ly = x - u[0] * 1.3, y - u[1] * 1.3
+            mb.box(lx, ly, 0.005, 0.1, 5.0, 0.01, 'Road line', rot=math.atan2(u[1], u[0]))
+            if rnd.random() < 0.72:
+                rot = math.atan2(v[1], v[0]) + (math.pi if rnd.random() < 0.5 else 0)
+                cars.append([round(x, 2), round(y, 2), 0.0, round(rot, 3), rnd.randrange(6)])
+    for (a, b) in [((-300, NARZ[0] + 2.0), (300, NARZ[0] + 2.0)), ((HUSZ[0] + 2.0, -300), (HUSZ[0] + 2.0, 300))]:
         A, B = S(*a), S(*b)
-        L = math.dist(A, B)
         for k in range(10):
             t = rnd.uniform(0.1, 0.9)
             x, y = A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t
@@ -376,17 +441,19 @@ def build_site(mats, col, towers, podium_o):
             cars.append([round(x, 2), round(y, 2), 0.0, round(math.atan2(B[1] - A[1], B[0] - A[0]), 3), rnd.randrange(6)])
     # ---------------- people on the pavements and in the courtyard
     for k in range(70):
-        g = pav if k < 40 else yard.difference(lawn).difference(pool.buffer(1) if pool.area else Polygon())
+        g = pav if k < 40 else yard.difference(lawn).difference(pool.buffer(1) if pool.area else Polygon()).difference(unary_union(taken) if taken else Polygon())
         p = rand_in(g.buffer(-0.6), rnd)
         if p is None:
             continue
         if any(Point(c[0], c[1]).distance(p) < 2.6 for c in cars):
             continue
         people.append([round(p.x, 2), round(p.y, 2), Z['paving'], rnd.randrange(6)])
+    for n in notes:
+        print('courtyard:', n)
     ob = make_object('Site', mb.to_mesh('Site', mats), col)
-    walk = walk_map(towers, podium_o, plot, asphalt, unary_union([pav, plaza, city_pav]), lawn, play, houses, cars, people)
+    walk = walk_map(towers, podium_o, plot, asphalt, unary_union([pav, yard, city_pav]), lawn, play, houses, cars, people)
     return dict(trees=[], cars=cars, people=people, benches=benches, labels=labels, lamps=list(LS.LIGHTS), walk=walk,
-                plot=plot, yard=yard)
+                plot=plot, yard=yard, notes=notes)
 
 
 def podium_bounds(O):
@@ -435,14 +502,31 @@ def pergola(mb, x, y, z, rot):
 
 
 def trade_centre(mb, g):
-    """the schema's four-storey shopping and services centre (render 7): glass storeys between
-    white slab bands, timber fins on its two long faces, a roof terrace under a white canopy"""
+    """the scheme's four-storey shopping and services centre (render 7): glazed storeys in a dark
+    grid between projecting white slab bands, timber fins over a third of each long face, the top
+    floor's terrace under a white canopy on posts (the glass was the shops' see-through glass, the
+    building read as an empty frame - 29.10.2026)"""
     FH = 4.2
+    inner = g.buffer(-0.3, join_style='mitre')
     for k in range(4):
         z = k * FH
-        mb.prism(g.buffer(-0.3, join_style='mitre'), z, z + FH - 0.45, 'Shop glass', 'Shop floor')
-        band = g.buffer(0.25, join_style='mitre').difference(g.buffer(-0.3, join_style='mitre'))
+        mb.prism(inner, z, z + FH - 0.45, 'Glass light', 'Shop floor')
+        band = g.buffer(0.25, join_style='mitre').difference(inner)
         mb.prism(band, z + FH - 0.45, z + FH, 'White band', 'White band', 'White band')
+        # the curtain wall's grid: mullions about every 1.6 m, a transom 1.1 m up
+        pts = list(inner.exterior.coords)
+        for a_, b_ in zip(pts, pts[1:]):
+            L = math.dist(a_, b_)
+            if L < 0.5:
+                continue
+            u = ((b_[0] - a_[0]) / L, (b_[1] - a_[1]) / L)
+            rot = math.atan2(u[1], u[0])
+            n = max(1, round(L / 1.6))
+            for j in range(n + 1):
+                t = min(L - 0.04, max(0.04, j * L / n))
+                mb.box(a_[0] + u[0] * t, a_[1] + u[1] * t, z, 0.07, 0.12, FH - 0.45, 'Frame dark', rot=rot)
+            for zz in (z + 1.1,):
+                mb.box((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2, zz, L, 0.12, 0.06, 'Frame dark', rot=rot)
     top = 4 * FH
     mb.prism(g, top, top + 0.2, 'White band', 'Roof')
     pts = list(g.exterior.coords)
@@ -453,14 +537,15 @@ def trade_centre(mb, g):
         n = (u[1], -u[0])
         if (c.x - (a[0] + b[0]) / 2) * n[0] + (c.y - (a[1] + b[1]) / 2) * n[1] > 0:
             n = (-n[0], -n[1])
-        for k in range(int(L / 0.9)):
-            t = 0.45 + k * 0.9
+        # (render 7: the fins over the right third of the face, the glass bare elsewhere)
+        for k in range(int(L / 3 / 0.45)):
+            t = L * 2 / 3 + 0.22 + k * 0.45
             mb.box(a[0] + u[0] * t + n[0] * 0.32, a[1] + u[1] * t + n[1] * 0.32, 0.0, 0.08, 0.28, top, 'Wood', rot=math.atan2(u[1], u[0]))
     canopy = g.buffer(-1.0, join_style='mitre')
     mb.prism(canopy, top + 3.2, top + 3.5, 'White band', 'White band', 'White band')
     for p in list(canopy.exterior.coords)[:-1]:
         mb.box(p[0], p[1], top + 0.2, 0.3, 0.3, 3.0, 'Stone white')
-    mb.prism(g.difference(g.buffer(-0.06, join_style='mitre')), top + 0.2, top + 1.1, 'Shop glass', 'Frame dark', 'Shop glass')
+    mb.prism(g.difference(g.buffer(-0.06, join_style='mitre')), top + 0.2, top + 1.1, 'Railing glass', 'Frame dark', 'Railing glass')
 
 
 def walk_map(towers, podium_o, plot, asphalt, paving, lawn, play, houses, cars, people):

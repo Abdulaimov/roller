@@ -182,5 +182,15 @@ export async function loadComplex(apartments, renderer, onProgress) {
       });
       flush();
     },
+    // (for the checks in tools/: a block's sides shot without the others in front of them)
+    hideTowers(keys) {
+      each((k, n, f, t) => {
+        const v = !keys.includes(k);
+        setPart(f, 'slab', v);
+        setPart(f, 'walls', v);
+        setVisible(t.roof, v);
+      });
+      flush();
+    },
   };
 }

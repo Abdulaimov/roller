@@ -354,9 +354,9 @@ export function buildWorld(scene, renderer, after = Promise.resolve()) {
     });
   } else addPeople(scene, PEOPLE, toScene);
   const props = after.then(() => {
-    // the complex's trees, then the city's (site metres for both: scene z = -north); in the city now
-    // and then a tree in flower
-    const kindOf = (i) => (i % 7 === 0 ? 'conifer' : i % 5 === 0 ? 'poplar' : i % 19 === 3 ? 'blossom' : i % 29 === 4 ? 'white' : 'broad');
+    // the complex's trees, then the city's (site metres for both: scene z = -north)
+    // (green only: Regnum's renders have no trees in flower)
+    const kindOf = (i) => (i % 7 === 0 ? 'conifer' : i % 5 === 0 ? 'poplar' : 'broad');
     const around = cityTrees.map((t, i) => [t.x, -t.z, 0, t.h, t.h * 0.38, kindOf(i), 'city']);
     addTrees(scene, TREES.protos, TREES.list, [...TREES.placed, ...around], toScene);
     addCars(scene, CARS, toScene);

@@ -403,32 +403,45 @@ def slab_mesh(mb, plan, h, skin):
 
 
 def crown(mb, block, plan, zr):
-    """the roof: a terrace with a tall white parapet frame, posts, a railing; plant rooms over the
-    stairs and lifts; solar panels; planters with small trees"""
+    """the roof: on А and В a terrace with a tall white parapet frame, posts, a railing; on Б a low
+    glass parapet between white bands (renders 1, 2, 4: Б has no frame - the model's frame stood
+    3.5-4 m over Б's roof, the fitted cameras of renders 1 and 2 put Б's top 24-26 px lower); plant
+    rooms over the stairs and lifts; solar panels"""
     enc = P(plan['enclosure'])
     roof = enc.buffer(-0.05, join_style='mitre')
     mb.prism(roof, zr - 0.25, zr + 0.15, 'Stone white', 'Roof', None)
-    ring = enc.buffer(0.18, join_style='mitre').difference(enc.buffer(-0.3, join_style='mitre'))
-    mb.prism_chamfer(ring, zr - 0.3, zr + 1.15, 'Stone white', 'White band', None, c=0.02)
-    # the crown band, standing proud
-    band = enc.buffer(0.55, join_style='mitre').difference(enc.buffer(0.05, join_style='mitre'))
-    mb.prism_chamfer(band, zr + 0.6, zr + 1.35, 'White band', 'White band', 'White band', c=0.03)
-    # the frame's posts and top rail (renders: a white frame over the terrace edge)
-    line = enc.buffer(0.3, join_style='mitre').exterior
-    L = line.length
-    n = max(8, int(L / 6.5))
-    for k in range(n):
-        p = line.interpolate(k * L / n)
-        mb.box(p.x, p.y, zr + 1.35, 0.35, 0.35, 2.6, 'Stone white')
-    top_ring = enc.buffer(0.45, join_style='mitre').difference(enc.buffer(0.12, join_style='mitre'))
-    mb.prism_chamfer(top_ring, zr + 3.95, zr + 4.35, 'White band', 'White band', 'White band', c=0.03)
-    # the light lines of the night renders: round the crown band and the frame's top rail
-    for zz in (zr + 1.36, zr + 3.92):
-        line_ring = enc.buffer(0.57 if zz < zr + 2 else 0.47, join_style='mitre').difference(enc.buffer(0.5 if zz < zr + 2 else 0.4, join_style='mitre'))
-        mb.prism(line_ring, zz, zz + 0.05, 'Night line', 'Night line', 'Night line')
-    # railing on the parapet
-    pts = list(enc.buffer(-0.12, join_style='mitre').exterior.coords)
-    mb.tube(pts, [zr + 1.15] * len(pts), [zr + 2.2] * len(pts), 0.04, 'Frame dark', closed=True)
+    if block['key'] == 'B':
+        ring = enc.buffer(0.18, join_style='mitre').difference(enc.buffer(-0.3, join_style='mitre'))
+        mb.prism_chamfer(ring, zr - 0.3, zr + 0.35, 'Stone white', 'White band', None, c=0.02)
+        pts = list(enc.buffer(-0.06, join_style='mitre').exterior.coords)
+        mb.ribbon(pts, zr + 0.35, zr + 1.3, 'Railing glass', closed=True, double=True)
+        band = enc.buffer(0.12, join_style='mitre').difference(enc.buffer(-0.18, join_style='mitre'))
+        mb.prism_chamfer(band, zr + 1.3, zr + 1.55, 'White band', 'White band', 'White band', c=0.02)
+        line_ring = enc.buffer(0.14, join_style='mitre').difference(enc.buffer(0.08, join_style='mitre'))
+        mb.prism(line_ring, zr + 1.27, zr + 1.31, 'Night line', 'Night line', 'Night line')
+    else:
+        ring = enc.buffer(0.18, join_style='mitre').difference(enc.buffer(-0.3, join_style='mitre'))
+        mb.prism_chamfer(ring, zr - 0.3, zr + 1.15, 'Stone white', 'White band', None, c=0.02)
+        # the crown band, standing proud
+        band = enc.buffer(0.55, join_style='mitre').difference(enc.buffer(0.05, join_style='mitre'))
+        mb.prism_chamfer(band, zr + 0.6, zr + 1.35, 'White band', 'White band', 'White band', c=0.03)
+        # the frame's posts and top rail (renders: a white frame over the terrace edge, its top about
+        # 1.6 storeys over the roof - render 2, 52 px against 32 px a storey at В's corner)
+        line = enc.buffer(0.3, join_style='mitre').exterior
+        L = line.length
+        n = max(8, int(L / 6.5))
+        for k in range(n):
+            p = line.interpolate(k * L / n)
+            mb.box(p.x, p.y, zr + 1.35, 0.35, 0.35, 3.6, 'Stone white')
+        top_ring = enc.buffer(0.45, join_style='mitre').difference(enc.buffer(0.12, join_style='mitre'))
+        mb.prism_chamfer(top_ring, zr + 4.95, zr + 5.35, 'White band', 'White band', 'White band', c=0.03)
+        # the light lines of the night renders: round the crown band and the frame's top rail
+        for zz in (zr + 1.36, zr + 4.92):
+            line_ring = enc.buffer(0.57 if zz < zr + 2 else 0.47, join_style='mitre').difference(enc.buffer(0.5 if zz < zr + 2 else 0.4, join_style='mitre'))
+            mb.prism(line_ring, zz, zz + 0.05, 'Night line', 'Night line', 'Night line')
+        # railing on the parapet
+        pts = list(enc.buffer(-0.12, join_style='mitre').exterior.coords)
+        mb.tube(pts, [zr + 1.15] * len(pts), [zr + 2.2] * len(pts), 0.04, 'Frame dark', closed=True)
     # plant rooms over the stairs and lift halls
     core = unary_union([P(c) for c in plan['common']]).buffer(0.3, join_style='mitre')
     for lf in plan.get('lifts', []):

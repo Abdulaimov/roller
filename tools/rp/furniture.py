@@ -28,7 +28,7 @@ import fsym  # noqa: E402
 
 R3 = lambda v: round(float(v), 3)
 NAMES = {'kitchen': ('Kitchen', 'Кухня', 'Ошхона'), 'living': ('Living room', 'Гостиная', 'Меҳмонхона')}
-MAIN = {'bedroom': ('bed', 'sofa'), 'living': ('sofa', 'armchair'), 'kitchen': ('kitchen', 'sofa')}
+MAIN = {'bedroom': ('bed', 'sofa'), 'living': ('sofa', 'armchair', 'bed'), 'kitchen': ('kitchen', 'sofa')}
 
 
 def rect_poly(c, w, l, a):
@@ -163,12 +163,18 @@ def fit_room(items, room, solid):
                 if ok:
                     break
         if not ok and it['type'] == 'sofa':
-            # (off the wall behind it by up to 15 cm, the back drawn into the wall)
+            # (off the wall behind it by up to 15 cm, the back drawn into the wall; then a little
+            # shorter, up to 12 %: flat 182's two sofas ran 2 cm into the side walls and the whole
+            # living room went to the viewer's own furnishing - 29.10.2026)
             n = (math.cos(it.get('f', 0)), math.sin(it.get('f', 0)))
-            for m in (0.03, 0.06, 0.09, 0.12, 0.15):
-                trial = dict(it, boxes=[[R3(b[0] + n[0] * m), R3(b[1] + n[1] * m)] + b[2:] for b in it['boxes']])
-                if inner.contains(footprint(trial)):
-                    it, ok = trial, True
+            for k in range(0, 5):
+                for m in (0.0, 0.03, 0.06, 0.09, 0.12, 0.15):
+                    trial = shorter_sofa(it, 1 - 0.03 * k)
+                    trial = dict(trial, boxes=[[R3(b[0] + n[0] * m), R3(b[1] + n[1] * m)] + b[2:] for b in trial['boxes']])
+                    if inner.contains(footprint(trial)):
+                        it, ok = trial, True
+                        break
+                if ok:
                     break
         if not ok and it['type'] == 'dining':
             for k in range(1, 8):
@@ -212,7 +218,29 @@ def fit_room(items, room, solid):
     return keep
 
 
+def shorter_sofa(it, s):
+    """the sofa's boxes shortened to s of their length along the sofa, about its middle"""
+    bs = it['boxes']
+    cx, cy = sum(b[0] for b in bs) / len(bs), sum(b[1] for b in bs) / len(bs)
+    u = (math.cos(bs[0][6]), math.sin(bs[0][6]))
+    out = []
+    for b in bs:
+        du = (b[0] - cx) * u[0] + (b[1] - cy) * u[1]
+        out.append([R3(b[0] - u[0] * du * (1 - s)), R3(b[1] - u[1] * du * (1 - s)), R3(b[2] * s if b[7] in ('seat', 'back') else b[2])] + b[3:])
+    return dict(it, boxes=out)
+
+
 def by_kind(kind, R, C, solid, rp):
+    if kind == 'living':
+        # a studio's one room («Хонаи умуми»: А's flats 2 and 182): the double bed as drawn, the
+        # TV, the desk with its chair. (It was read as a living room: a sofa off the child's bed
+        # beside it, an armchair off the desk's office chair, a coffee table off the desk's return,
+        # and no bed - 29.10.2026)
+        beds = [it for it in bedroom(R, C, solid) if it['type'] == 'bed']
+        if any(b['w'] >= 1.3 for b in beds):
+            din = dining(R, solid, C)
+            out = beds + ([din] if din else [])
+            return out + desks_tv(R, C, solid, out)
     if kind == 'kitchen' or kind == 'living':
         out = []
         run = kitchen(R, C, solid) if kind == 'kitchen' else None
@@ -492,7 +520,7 @@ def dining(R, solid, C=()):
     if t:
         (cx, cy), tw, tl, ta = t
         a = snap(ta)
-        chairs_out = [[R3(p[0]), R3(p[1]), R3(facing(p, a, (cx, cy)))] for p in pts]
+        chairs_out = [[R3(p[0]), R3(p[1]), R3(to_table(p, (cx, cy), a, tl))] for p in pts]
         return dict(type='dining', c=[R3(cx), R3(cy)], w=R3(min(tl, 2.4)), d=R3(min(tw, 1.1)), a=R3(a), chairs=chairs_out)
     cx, cy = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
     xs, ys = [p[0] for p in pts], [p[1] for p in pts]
@@ -502,8 +530,22 @@ def dining(R, solid, C=()):
     W = max(0.8, min(ex, ey) - 0.75)
     L = max(L - 0.0, 1.0)
     # (each chair square to the table: the side chairs face across it, the end ones along it)
-    chairs_out = [[R3(p[0]), R3(p[1]), R3(facing(p, a, (cx, cy)))] for p in pts]
+    chairs_out = [[R3(p[0]), R3(p[1]), R3(to_table(p, (cx, cy), a, L))] for p in pts]
     return dict(type='dining', c=[R3(cx), R3(cy)], w=R3(min(L, 2.4)), d=R3(min(W, 1.1)), a=R3(a), chairs=chairs_out)
+
+
+def to_table(p, c, a, L):
+    """the way a chair at p faces a table centred on c, its long side L along angle a: across the
+    table where the chair stands along a long side, along it at the ends (the corner chairs of an
+    8-seat table faced the ends - flat 182, 29.10.2026)"""
+    u = (math.cos(a), math.sin(a))
+    du = (p[0] - c[0]) * u[0] + (p[1] - c[1]) * u[1]
+    dv = -(p[0] - c[0]) * u[1] + (p[1] - c[1]) * u[0]
+    if abs(du) <= L / 2 - 0.05:
+        f = a + (-math.pi / 2 if dv > 0 else math.pi / 2)
+    else:
+        f = a + (math.pi if du > 0 else 0.0)
+    return math.atan2(math.sin(f), math.cos(f))
 
 
 def snap(a):
@@ -649,7 +691,9 @@ def bedroom(R, C, solid):
     # as beds - unless its twin stands beside it: two single beds side by side)
     if any(b['w'] >= 1.3 for b in beds):
         twin = lambda b: any(o is not b and o['w'] < 1.3 and abs(o["l"] - b["l"]) < 0.15 and 0.5 < math.dist(o["c"], b["c"]) < 2.6 for o in beds)
-        beds = [b for b in beds if not (b['w'] < 1.3 and not twin(b))]
+        # (...or it is drawn as a bed, with its pillow and blanket: a child's bed in a studio)
+        drawn = lambda b: not b.get('rect') and len(b.get('faces') or []) >= 3
+        beds = [b for b in beds if not (b['w'] < 1.3 and not twin(b) and not drawn(b))]
     out, used = [], []
     double = False
     for b in sorted(beds, key=lambda b: (not b.get('rect'), -b['w'] * b['l'])):

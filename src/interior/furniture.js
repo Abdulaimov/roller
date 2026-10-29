@@ -96,7 +96,11 @@ export function vase(k, M, x, y, z, h = 0.3) {
   const R = rnd(Math.round(x * 100 + 500));
   for (let i = 0; i < 4; i++) {
     const a = R() * Math.PI * 2, s = 0.12 + R() * 0.12;
-    k.tube(M.color(0x6b5440, 0.9), [[x, y + h * 0.8, z], [x + Math.cos(a) * s * 0.4, y + h + 0.25, z + Math.sin(a) * s * 0.4], [x + Math.cos(a) * s, y + h + 0.45 + R() * 0.2, z + Math.sin(a) * s]], 0.004, 8);
+    // (none behind the piece's back, z 0: the branches went through the wall behind a TV unit -
+    // 29.10.2026)
+    let dz = Math.sin(a) * s;
+    if (z + dz < 0.02) dz = Math.abs(dz);
+    k.tube(M.color(0x6b5440, 0.9), [[x, y + h * 0.8, z], [x + Math.cos(a) * s * 0.4, y + h + 0.25, z + dz * 0.4], [x + Math.cos(a) * s, y + h + 0.45 + R() * 0.2, z + dz]], 0.004, 8);
   }
 }
 
@@ -419,7 +423,9 @@ export function dining(k, M, w = 1.6, d = 0.9, h = 2.8) {
     const x = per === 1 ? 0 : (i - 0.5) * (w / 2);
     for (const s of [-1, 1]) {
       k.save().offset(x, s * (d / 2 + 0.38), s > 0 ? Math.PI : 0);
+      k.begin?.('chair');
       chair(k, M);
+      k.end?.();
       k.restore();
     }
   }
@@ -519,7 +525,8 @@ export function shelving(k, M, w, h, d = 0.4) {
 // The drawing gives each fitting's outline; these fill an outline of `w` x `d` (d from the wall).
 
 /** wall-hung WC in front of a tiled cistern boxing */
-export function toilet(k, M, w, d, h) {
+/** a wall-hung WC on its boxing; the paper holder on side `holder` (1 right, -1 left, 0 none) */
+export function toilet(k, M, w, d, h, holder = 1) {
   const bw = Math.min(w, 0.6);
   k.box(M.tileWall, -bw / 2, 0, 0, bw / 2, 1.1, 0.2);
   k.box(M.chrome, -0.12, 0.98, 0.2, 0.12, 1.07, 0.208);
@@ -536,11 +543,13 @@ export function toilet(k, M, w, d, h) {
   k.add(M.ceramic, seat);
   k.restore();
   // paper holder on the boxing's side: an arm and the roll on it
-  k.box(M.chrome, bw / 2 + 0.002, 0.7, 0.12, bw / 2 + 0.02, 0.715, 0.135);
-  k.box(M.chrome, bw / 2 + 0.02, 0.7, 0.12, bw / 2 + 0.13, 0.715, 0.135);
+  if (!holder) return;
+  const s = holder;
+  k.box(M.chrome, s * (bw / 2 + 0.002), 0.7, 0.12, s * (bw / 2 + 0.02), 0.715, 0.135);
+  k.box(M.chrome, s * (bw / 2 + 0.02), 0.7, 0.12, s * (bw / 2 + 0.13), 0.715, 0.135);
   const roll = new THREE.CylinderGeometry(0.055, 0.055, 0.1, 24);
   roll.rotateZ(Math.PI / 2);
-  roll.translate(bw / 2 + 0.075, 0.66, 0.127);
+  roll.translate(s * (bw / 2 + 0.075), 0.66, 0.127);
   k.add(M.color(0xfbfaf7, 0.95), roll);
 }
 

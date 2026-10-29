@@ -13,7 +13,8 @@ import sys
 from shapely.geometry import Point, Polygon
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MAIN = {'bedroom': ('bed', 'sofa'), 'living': ('sofa', 'armchair'), 'kitchen': ('kitchen', 'sofa')}
+# (a studio's one room has the bed for its main piece: А's flats 2 and 181)
+MAIN = {'bedroom': ('bed', 'sofa'), 'living': ('sofa', 'armchair', 'bed'), 'kitchen': ('kitchen', 'sofa')}
 
 
 def centre(it):

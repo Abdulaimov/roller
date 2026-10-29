@@ -157,13 +157,8 @@ export function addTrees(scene, protos, list, placed, toScene) {
     ...list.map(([x, y, sc, sz, rot, k], i) => ({ x, y, z: 0, h: protos[k].h * sc * sz, r: protos[k].r * sc, rot, kind: pick(protos[k], i) })),
     ...placed.map(([x, y, z, h, r, kind, city], i) => ({ x, y, z, h, r, rot: i * 2.39996, kind, city: !!city })),
   ];
-  // the courtyards and the walks in flower (23.10.2026: "beautiful, saturated trees"): now and then a
-  // small or middling broadleaf of the plan a pink-flowering one, more rarely a white one
-  items.forEach((t, i) => {
-    if (t.city || t.z > 1 || (t.kind !== 'broad' && t.kind !== 'small') || t.h > 11) return;
-    if (i % 5 === 2) t.kind = 'blossom';
-    else if (i % 11 === 7) t.kind = 'white';
-  });
+  // (Ali Binokor's courtyards were in flower, pink and white, at that client's wish; Regnum's renders
+  // 1-8 have green trees only - none turned into a flowering one here, 29.10.2026)
   const groups = {};
   items.forEach((t, i) => {
     const vs = kinds[t.kind] ?? kinds.broad;

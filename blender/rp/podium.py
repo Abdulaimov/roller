@@ -14,7 +14,7 @@ from shapely.ops import unary_union
 from complex.geom import MeshBuilder, make_object
 from complex.towers import add_rails
 
-from .config import GROUND, SECOND, sheet_to_site
+from .config import DOORS, GROUND, RAMP_X, SECOND, sheet_to_site
 
 TOP = GROUND + SECOND
 BAY = 3.3
@@ -30,6 +30,8 @@ def outline(fr):
 def build(mats, col, fr, towers_fp):
     O = outline(fr)
     mb = MeshBuilder()
+    # the ramp's door on кӯчаи Нарзиқулова (no shop window there)
+    ramp = Polygon([sheet_to_site(x, y) for x, y in [(RAMP_X[0] - 0.6, 15.0), (RAMP_X[1] + 0.6, 15.0), (RAMP_X[1] + 0.6, 22.0), (RAMP_X[0] - 0.6, 22.0)]])
     inner = O.buffer(-4.2, join_style='mitre')
     # inside the glass: floors, lit ceilings, a back wall
     strip = O.buffer(-0.35, join_style='mitre').difference(inner)
@@ -57,6 +59,8 @@ def build(mats, col, fr, towers_fp):
         for i in range(k + 1):
             s = i * step
             p = (a[0] + u[0] * s - n[0] * 0.15, a[1] + u[1] * s - n[1] * 0.15)
+            if ramp.contains(Point(p)):
+                continue
             if i % 3 == 0:
                 mb.box(p[0], p[1], 0.0, 0.9, 0.56, TOP - 0.45, 'Podium wood', rot=rot)
                 for t in (-0.3, -0.1, 0.1, 0.3):   # the boards' joints
@@ -70,6 +74,8 @@ def build(mats, col, fr, towers_fp):
             if w < 0.4:
                 continue
             m = (a[0] + u[0] * (s0 + s1) / 2 - n[0] * 0.3, a[1] + u[1] * (s0 + s1) / 2 - n[1] * 0.3)
+            if ramp.buffer(0.5).contains(Point(m)):
+                continue
             for z0, z1 in ((0.0, GROUND - 0.45), (GROUND + 0.6, TOP - 0.1)):
                 mb.box(m[0], m[1], z0, w, 0.03, z1 - z0, 'Shop glass', rot=rot)
                 for zz in (z0, z1 - 0.07, z0 + 2.9 if z1 - z0 > 3.5 else None):
@@ -79,6 +85,31 @@ def build(mats, col, fr, towers_fp):
                     mb.box(m[0] + u[0] * t, m[1] + u[1] * t, z0, 0.06, 0.08, z1 - z0, 'Shop frame', rot=rot)
             # the dark band at floor 2
             mb.box(m[0] + n[0] * 0.05, m[1] + n[1] * 0.05, GROUND - 0.45, w + 0.6, 0.3, 1.05, 'Stone dark', rot=rot)
+    # the ramp's door: a dark opening 3.4 m high, the stone over it to the band at floor 2, the
+    # ramp's walls and its floor sloping down inside
+    edge = O.exterior.intersection(ramp)
+    if not edge.is_empty:
+        ea, eb = Point(edge.coords[0] if edge.geom_type == 'LineString' else edge.geoms[0].coords[0]), Point(edge.coords[-1] if edge.geom_type == 'LineString' else edge.geoms[-1].coords[-1])
+        L = ea.distance(eb)
+        u = ((eb.x - ea.x) / L, (eb.y - ea.y) / L)
+        n = (u[1], -u[0])
+        if O.contains(Point((ea.x + eb.x) / 2 + n[0] * 0.5, (ea.y + eb.y) / 2 + n[1] * 0.5)):
+            n = (-n[0], -n[1])
+        rot = math.atan2(u[1], u[0])
+        mx, my = (ea.x + eb.x) / 2, (ea.y + eb.y) / 2
+        mb.box(mx - n[0] * 1.5, my - n[1] * 1.5, -0.6, L - 0.4, 3.0, 4.0, 'Ramp dark', rot=rot)
+        mb.box(mx - n[0] * 0.2, my - n[1] * 0.2, 3.4, L, 0.5, GROUND - 0.45 - 3.4, 'Stone dark', rot=rot)
+        for e in (-L / 2 + 0.25, L / 2 - 0.25):
+            mb.box(mx + u[0] * e - n[0] * 0.2, my + u[1] * e - n[1] * 0.2, 0.0, 0.5, 0.5, 3.4, 'Stone dark', rot=rot)
+    # the doors from the courtyard: dark glass doors in a frame, a white canopy over them
+    for (dx, dy), (ox, oy) in DOORS:
+        c0 = sheet_to_site(dx, dy)
+        o = sheet_to_site(ox, oy)
+        rot = math.atan2(o[1], o[0]) + math.pi / 2
+        mb.box(c0[0] + o[0] * 0.05, c0[1] + o[1] * 0.05, 0.0, 2.6, 0.2, 3.0, 'Frame dark', rot=rot)
+        mb.box(c0[0] + o[0] * 0.17, c0[1] + o[1] * 0.17, 0.05, 2.4, 0.05, 2.85, 'Glass dark', rot=rot)
+        mb.box(c0[0] + o[0] * 1.0, c0[1] + o[1] * 1.0, 3.3, 3.4, 2.0, 0.25, 'White band', rot=rot)
+        mb.box(c0[0] + o[0] * 1.95, c0[1] + o[1] * 1.95, 3.25, 3.4, 0.08, 0.05, 'Night white', rot=rot)
     # the podium's roof: a terrace where no block stands, a projecting white edge, a glass railing
     roof = O.difference(towers_fp.buffer(0.05, join_style='mitre'))
     # the canopy round the podium (render 6): a white slab a metre out, lights in its soffit
