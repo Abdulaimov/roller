@@ -428,9 +428,10 @@ const SURFACES = {
     }
     return { canvas: c, metres: 2.4 };
   },
-  // the plaza round the complex: pale stone pavers 30 x 60 cm in running bond, mixed tones
+  // the plaza round the complex: square pavers, sand beige and grey mixed at random (Regnum render 8;
+  // the pale ones of before read as a white glare in the sun)
   plaza() {
-    const { c, g, rnd } = blocks(512, '#d6d1c8', '#a9a39a', 8, 4, 0.5, ['#d9d4cb', '#cfc9bf', '#e0dbd2', '#c8c2b8', '#d4cdc1'], 53);
+    const { c, g, rnd } = blocks(512, '#c4b49c', '#8d8880', 8, 8, 0, ['#cbb797', '#c2b08f', '#d3c2a5', '#a9a9a6', '#b7b4ae', '#9d9f9f', '#c8bba5'], 53);
     for (let k = 0; k < 9000; k++) {
       g.globalAlpha = 0.18;
       g.fillStyle = rnd() < 0.5 ? '#a8a299' : '#ebe7df';

@@ -172,7 +172,6 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
   const frame = planFrame(tower);
   const baseY = fl.z + tower.slab;
   const H = fl.h - 0.5; // clear height
-  const glassTower = fl.plan.startsWith('A'); // block A: glass all round
 
   const group = new THREE.Group();
   group.position.set(frame.position.x, baseY, frame.position.z);
@@ -305,6 +304,14 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
         for (let d = 0.12; d < 0.9 && !beyond; d += 0.06) beyond = roomsAt.at(mid[0] - r.n[0] * d, mid[1] - r.n[1] * d);
         const outdoorHere = room.kind === 'loggia' || room.kind === 'terrace';
         if (outdoorHere && beyond?.kind === 'room' && !['loggia', 'terrace'].includes(beyond.data.room.kind)) return;
+        if (outdoorHere && !beyond) {
+          // a balcony's outer edge drawn in glass: a glass railing, as outside (renders 1, 2, 6) -
+          // not glass to the ceiling, which shut the balcony in like a window
+          slab(k, M.frame, r.a, r.b, r.n, -0.09, 0.07, 0, 0.1);
+          slab(k, M.glass, r.a, r.b, r.n, -0.06, 0.012, 0.1, 1.05);
+          slab(k, M.frame, r.a, r.b, r.n, -0.095, 0.08, 1.05, 1.1);
+          return;
+        }
         curtainWall(k, M, r.a, r.b, r.n, H);
         // sheer curtains gathered where the glass meets a wall, in the living rooms and bedrooms
         if (fitted.includes(apt) && ['living', 'bedroom', 'kitchen'].includes(room.kind)) {
@@ -615,13 +622,6 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     }
     addOutline(poly);
   };
-  const glassUp = (room, r, t0, t1) => {
-    if (filled(r, t0, t1, 0.12)) return;
-    const { A, B, poly } = piece(r, t0, t1, 0.12);
-    fillers.push(poly);
-    curtainWall(k, M, A, B, r.n, H);
-    addOutline(poly);
-  };
   const railing = (room, r, t0, t1) => {
     if (filled(r, t0, t1, 0.12)) return;
     const { A, B, poly } = piece(r, t0, t1, 0.12);
@@ -629,14 +629,6 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     slab(k, M.frame, A, B, r.n, -0.09, 0.07, 0, 0.1);
     slab(k, M.glass, A, B, r.n, -0.06, 0.012, 0.1, 1.05);
     slab(k, M.frame, A, B, r.n, -0.095, 0.08, 1.05, 1.1);
-    addOutline(poly);
-  };
-  const parapet = (room, r, t0, t1) => {
-    if (filled(r, t0, t1, 0.12)) return;
-    const { A, B, poly } = piece(r, t0, t1, 0.12);
-    fillers.push(poly);
-    slab(k, M.wall, A, B, r.n, -0.12, 0.125, 0, 1.0);
-    slab(k, M.sill, A, B, r.n, -0.14, 0.16, 1.0, 1.04);
     addOutline(poly);
   };
   // what is across each opening, and the stretches of it that no doorway covers (a doorway made
@@ -760,12 +752,10 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     // no wall - one 0.7 m deep stood across the door of B19-3's living room)
     else if (it.L < 0.1 && thick > 2 * it.L + 0.1 && across !== 'outside') done = 'jamb';
     else if (OUTDOOR.has(k1) && (across === 'outside' || across === 'terrace')) {
-      // tower A is glass all round (render 4): its small loggias (the air conditioners' ones) are
-      // behind the curtain wall, its terraces have glass railings; the slab blocks' loggias and
-      // terraces keep their parapets
-      const close = !glassTower ? parapet : k1 === 'loggia' ? glassUp : railing;
-      for (const [t0, t1] of free) close(room, r, t0, t1);
-      done = !glassTower ? 'parapet' : k1 === 'loggia' ? 'glazed' : 'railing';
+      // open balconies with glass railings, in every block (renders 1, 2, 4, 6: one steps out onto
+      // them; block A's were glazed to the ceiling, the others had a solid parapet)
+      for (const [t0, t1] of free) railing(room, r, t0, t1);
+      done = 'railing';
     } else {
       const glassy = across === 'outside' || across === 'terrace' || (across === 'same' && (OUTDOOR.has(k2) || OUTDOOR.has(k1)));
       for (const [t0, t1] of free) {

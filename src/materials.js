@@ -347,21 +347,28 @@ const LIB = {
   Roof: { set: 'concrete', tile: 3, color: '#a3a19c', roughness: 0.95, normal: 0.6, vary: 0.04 },
   'Solar panel': { color: '#1b2232', roughness: 0.18, metalness: 0.2, env: 1.1 },
   // glass: dark body seen through, reflections of the sky do the rest; slight tints only
-  'Window glass': { ...glass('#000000', 0.03, { env: 0.9, tint: '#c4d4dc', interior: [2.9, 3.5, 4.2, 12.0, 0.17, 0.26, 0.012, 0.1, 0.6] }), physical: { ior: 1.6 } },
+  // (28.10.2026, Regnum renders 1-6: blue-grey coated glass with the sky in it, not the near-black
+  // of before - the rooms behind it show, the reflection does most of the work)
+  'Window glass': { ...glass('#000000', 0.03, { env: 1.3, tint: '#a9bdcd', interior: [2.9, 3.5, 4.2, 12.0, 0.22, 0.3, 0.01, 0.34, 1.2], specular: '#dbe6ee' }), physical: { ior: 1.9 } },
   // block A (renders 1, 2, 4): dark blue-green coated glass, the rooms behind it readable (curtains,
   // furniture, a light here and there), the sky in it strongest towards the top and at grazing angles
   // (22.10.2026: darker, as on renders 1, 2 and 4: a charcoal-blue body, the sky in it, not a pale blue face)
   // at night (the tower's night render): most rooms lit, the light and the glass teal
-  'Tower glass': { ...glass('#000000', 0.02, { env: 1.35, tint: '#97b0c2', interior: [3.2, 3.75, 6.0, 12.0, 0.2, 0.36, 0.006, 0.3, 1.05], specular: '#d6e3ec', night: { lamp: '#4fa9b6', share: 0.6, dim: 0.14 } }), physical: { ior: 2.1 } },
+  // (Regnum: block Б's glass corner, renders 1, 2, 4 - a light, sky-blue mirror in pale frames)
+  'Tower glass': { ...glass('#000000', 0.02, { env: 1.5, tint: '#b7c9d7', interior: [3.2, 3.75, 6.0, 12.0, 0.22, 0.36, 0.006, 0.46, 1.3], specular: '#e2ebf2', night: { lamp: '#f0c88a', share: 0.55, dim: 0.1 } }), physical: { ior: 2.1 } },
   'Strip dark': { color: '#3e3934', roughness: 0.55, metalness: 0.25, env: 0.6 },
   // the slab blocks (renders 1-3): golden sandstone cornices and bay frames; the narrow tall
   // glazing light grey, the dark strips dark green, the corner bays blue
   // the facade's dark ground and white grid (the developer's model)
   'Facade dark': { set: 'concrete', tile: 2.5, color: '#2a2e35', roughness: 0.42, metalness: 0.25, normal: 0.15, vary: 0.01, env: 1.1 },
   'Pilaster white': { set: 'plaster', mapless: true, tile: 2.2, color: '#f2f0eb', roughness: 0.62, normal: 0.18, vary: 0.012, env: 0.9 },
-  'Facade white': { set: 'plaster', mapless: true, tile: 2.2, color: '#eeebe5', roughness: 0.66, normal: 0.2, vary: 0.012, env: 0.85 },
+  // (Regnum renders 1-4: the wall panels between the white pilasters a light cool grey - metal
+  // cassettes, a little sheen - not white)
+  'Facade white': { set: 'plaster', mapless: true, tile: 2.2, color: '#d2d6db', roughness: 0.5, metalness: 0.08, normal: 0.12, vary: 0.01, env: 1.0 },
   // the loggias' back walls: the model's warm beige (a deck texture there read as red from afar)
-  'Loggia beige': { set: 'plaster', mapless: true, tile: 2.2, color: '#d8b991', roughness: 0.75, normal: 0.15, vary: 0.02, env: 0.6 },
+  // (Regnum renders 1, 2, 6: the balconies' back walls warm wood boards)
+  // (the deck texture read as red stripes from afar: a plain warm light brown)
+  'Loggia beige': { set: 'plaster', mapless: true, tile: 2.2, color: '#b99474', roughness: 0.7, normal: 0.15, vary: 0.03, env: 0.55 },
   'Stone pale': { set: 'plaster', mapless: true, tile: 2.2, color: '#b8bbbe', roughness: 0.7, normal: 0.25, env: 0.6 },
   // the cornice bands: bronze-gold as on the renders (the earlier #e8c08a was the yellowest thing on the facade)
   'Stone gold': { set: 'plaster', mapless: true, tile: 2.2, color: '#d0a062', roughness: 0.62, normal: 0.35, vary: 0.03, env: 0.6 },
@@ -420,7 +427,7 @@ const LIB = {
   'Road line': { color: '#e4e2db', roughness: 0.7 },
   Sidewalk: { color: '#ffffff', roughness: 0.95, vary: 0.05, env: 0.6 },
   // the plaza and the sidewalks: drawn pavers (textures.js), the photographed sets are dark and stained
-  Paving: { color: '#ffffff', roughness: 0.95, vary: 0.05, env: 0.6 },
+  Paving: { color: '#f2eee8', roughness: 1, vary: 0.05, env: 0.35 },
   Kerb: { set: 'concrete', tile: 2, color: '#d9d4ca', roughness: 0.95, normal: 0.6 },
   Lawn: { set: 'grass', tile: 2.4, color: '#6c9a52', roughness: 1, normal: 0.9, vary: 0.06, detile: true, tint: '#9ebb74' },
   Grass: { set: 'grass', tile: 2.4, color: '#73955a', roughness: 1, normal: 0.9, vary: 0.08, detile: true, tint: '#a8b97c' },
@@ -466,17 +473,19 @@ const LIB = {
   'Flowers yellow': { color: '#e8c13c', roughness: 0.85, leafy: true, env: 0.35 },
   'Flowers violet': { color: '#8f54b5', roughness: 0.85, leafy: true, env: 0.35 },
   'Flowers white': { color: '#f2f0ea', roughness: 0.85, leafy: true, env: 0.35 },
-  'Play orange': { set: 'rubber', tile: 2, color: '#c0603e', roughness: 1, normal: 0.7 },
+  // (Regnum render 8: the playground's rubber sky blue)
+  'Play orange': { set: 'rubber', tile: 2, color: '#3a93d6', roughness: 1, normal: 0.7 },
   'Play blue': { set: 'rubber', tile: 2, color: '#2f6da8', roughness: 0.8, normal: 0.5 },
   // neighbours: plain massing in the model; storeys and windows are drawn on (facade: storey
   // height, bay width, roof level, metres)
   Neighbour: { set: 'plaster', tile: 3, color: '#d9cfc0', roughness: 0.92, normal: 0.25, vary: 0.04, env: 0.6, facade: [3.0, 3.3, 48] },
-  'Neighbour solid': { set: 'plaster', tile: 3, color: '#e3d9c9', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
-  'Neighbour cream': { set: 'plaster', tile: 3, color: '#e8d4a2', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
-  'Neighbour peach': { set: 'plaster', tile: 3, color: '#e6bd9b', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
-  'Neighbour blue': { set: 'plaster', tile: 3, color: '#b8cbd8', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
-  'Neighbour mint': { set: 'plaster', tile: 3, color: '#c0d5bf', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
-  'Neighbour rose': { set: 'plaster', tile: 3, color: '#dfb5ab', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
+  // (the neighbours white, as the renders' context massing - 28.10.2026)
+  'Neighbour solid': { set: 'plaster', tile: 3, color: '#eceeef', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
+  'Neighbour cream': { set: 'plaster', tile: 3, color: '#e9e9e6', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
+  'Neighbour peach': { set: 'plaster', tile: 3, color: '#e6e8ea', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
+  'Neighbour blue': { set: 'plaster', tile: 3, color: '#e3e6e9', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
+  'Neighbour mint': { set: 'plaster', tile: 3, color: '#e8e9e7', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
+  'Neighbour rose': { set: 'plaster', tile: 3, color: '#e5e6e6', roughness: 0.92, normal: 0.3, vary: 0.04, env: 0.6, facade: [3.0, 3.2, 15] },
   // plants in the model (balcony planters, hedges, deck planting)
   Shrub: { color: '#3c5a26', roughness: 0.95, leafy: true, env: 0.35 },
   Leaves: { color: '#36531f', roughness: 0.95, leafy: true, env: 0.35 },

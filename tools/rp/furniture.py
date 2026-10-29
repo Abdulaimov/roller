@@ -217,7 +217,7 @@ def by_kind(kind, R, C, solid, rp):
         run = kitchen(R, C, solid) if kind == 'kitchen' else None
         if run:
             out += runs_of(run, R, C, solid)
-        din = dining(R, solid)
+        din = dining(R, solid, C)
         if din:
             out.append(din)
         if kind == 'living' and not run:
@@ -243,19 +243,19 @@ def by_kind(kind, R, C, solid, rp):
         run = kitchen(R, C, solid)
         if run:
             out = runs_of(run, R, C, solid)
-            din = dining(R, solid)
+            din = dining(R, solid, C)
             out += [din] if din else []
             return [dict(it, room_kind='kitchen') for it in out]
         liv = living(R, C, solid, rp)
         if liv:
-            din = dining(R, solid)
+            din = dining(R, solid, C)
             out = liv + ([din] if din else [])
             if din or any(it['type'] == 'armchair' for it in liv):
                 out = [dict(it, room_kind='living') for it in out]
             return out + desks_tv(R, C, solid, out)
         # (armchairs round a coffee table and a dining table, the sofa not read: a living room too)
         arms = [r for r in R if 0.62 <= r['w'] <= 0.98 and r['l'] <= 1.0]
-        din = dining(R, solid)
+        din = dining(R, solid, C)
         if len(arms) >= 2 and din:
             mx, my = sum(r['c'][0] for r in arms) / len(arms), sum(r['c'][1] for r in arms) / len(arms)
             out = [dict(type='armchair', c=[R3(r['c'][0]), R3(r['c'][1])], w=R3(r['w']), d=R3(r['l']),
@@ -443,7 +443,29 @@ def desks_tv(R, C, solid, got):
     return out
 
 
-def dining(R, solid):
+def drawn_table(g, C):
+    """the table the chairs g stand round, as the sheet draws it: what is left of the drawing they
+    belong to without them (flat 70's kitchen: a 0.7 x 1.8 m table against the wall, three chairs
+    on one side and one at each end - the chairs' middle put the table on the chairs). None where it
+    is not that clear"""
+    chairs = unary_union([o['poly'] for o in g])
+    for c in C:
+        if sum(1 for o in g if c['geom'].distance(o['poly']) < 0.02) < max(3, len(g) - 1):
+            continue
+        rest = c['geom'].difference(chairs.buffer(0.03, join_style=2))
+        if rest.is_empty or rest.length < 1.2:
+            continue
+        (tx, ty), tw, tl, ta = fsym.mrr(rest.convex_hull)
+        if not (0.5 <= tw <= 1.3 and 0.7 <= tl <= 2.8):
+            continue
+        top = rect_poly((tx, ty), tw, tl, ta).buffer(-0.08)
+        if any(top.contains(Point(*o['c'])) for o in g):
+            continue
+        return (tx, ty), tw, tl, ta
+    return None
+
+
+def dining(R, solid, C=()):
     # (not the hob or the sink: boxes of that size with curves in them; one box drawn twice, once)
     chairs = []
     for r in R:
@@ -465,6 +487,12 @@ def dining(R, solid):
     if len(g) < 3:
         return None
     pts = [o['c'] for o in g]
+    t = drawn_table(g, C)
+    if t:
+        (cx, cy), tw, tl, ta = t
+        a = snap(ta)
+        chairs_out = [[R3(p[0]), R3(p[1]), R3(facing(p, a, (cx, cy)))] for p in pts]
+        return dict(type='dining', c=[R3(cx), R3(cy)], w=R3(min(tl, 2.4)), d=R3(min(tw, 1.1)), a=R3(a), chairs=chairs_out)
     cx, cy = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
     xs, ys = [p[0] for p in pts], [p[1] for p in pts]
     ex, ey = max(xs) - min(xs), max(ys) - min(ys)
