@@ -375,7 +375,8 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
   const pending = []; // openings in a room's outline that made no doorway: { apt, room, r }
   const doorSpans = []; // the doorways made: { a, b, u, n, len } (the run of the room they were made from)
   // first pass: what is round each room, and a clear zone in front of every opening
-  const zones = []; // { poly, mid }
+  const zones = []; // { poly, mid, keep }
+  const zoneOf = new Map(); // opening run -> its zone
   for (const apt of apts) {
     for (const room of apt.data.rooms) {
       const runs = edgeRuns(room, solid);
@@ -392,8 +393,10 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
           b = [m[0] + r.u[0] * 0.55, m[1] + r.u[1] * 0.55];
         }
         const poly = [a, b, [b[0] + r.n[0] * d, b[1] + r.n[1] * d], [a[0] + r.n[0] * d, a[1] + r.n[1] * d]];
-        keepout.push(way(poly, room));
-        zones.push({ poly, mid: [(r.a[0] + r.b[0]) / 2, (r.a[1] + r.b[1]) / 2] });
+        const z = { poly, mid: [(r.a[0] + r.b[0]) / 2, (r.a[1] + r.b[1]) / 2], keep: way(poly, room) };
+        keepout.push(z.keep);
+        zones.push(z);
+        zoneOf.set(r, z);
       }
     }
   }
@@ -589,6 +592,8 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     if (room._wet) slab(k, M.tileWall, A, B, r.n, 0, 0.008, 0, H);
     else slab(k, M.skirting, A, B, r.n, 0, 0.014, 0, 0.08);
     addOutline(poly);
+    // (a wall to put furniture against: the far wall of V3-14's walk-in wardrobe is one of these)
+    solid.add(poly, 'wall');
   };
   const glazeUp = (room, r, t0, t1, thick) => {
     if (filled(r, t0, t1, thick)) return;
@@ -751,6 +756,9 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
     let done;
     const k1 = room.kind, k2 = other?.kind;
     if (!free.length) done = 'doorways';
+    // (a few cm of a room's outline at a door jamb, the way across it running along the doorway:
+    // no wall - one 0.7 m deep stood across the door of B19-3's living room)
+    else if (it.L < 0.1 && thick > 2 * it.L + 0.1 && across !== 'outside') done = 'jamb';
     else if (OUTDOOR.has(k1) && (across === 'outside' || across === 'terrace')) {
       // tower A is glass all round (render 4): its small loggias (the air conditioners' ones) are
       // behind the curtain wall, its terraces have glass railings; the slab blocks' loggias and
@@ -765,6 +773,13 @@ export function buildFloor(towerKey, floor, apts, walk = null) {
         else wallUp(room, r, t0, t1, thick);
       }
       done = glassy ? 'glazed' : 'walled';
+    }
+    // (an opening closed all along is no doorway: its way in stays free of furniture no longer - the
+    // walk-in wardrobe of V3-14 kept a corner empty for a gap of 3 cm by a concrete pier)
+    const z = zoneOf.get(r);
+    if (z && done !== 'doorways' && free.reduce((s, [t0, t1]) => s + t1 - t0, 0) >= it.L - 0.05) {
+      keepout.splice(keepout.indexOf(z.keep), 1);
+      zones.splice(zones.indexOf(z), 1);
     }
     gaps.push({ apt, room, r, across, other, depth, done });
   }
@@ -1629,6 +1644,14 @@ function placeDrawn({ k, M, H, apt, solid, keepout, lights, ceiling }) {
       const p = backOf(it, d), w = ['toilet', 'basin'].includes(it.type) ? Math.max(it.w, 0.5) : it.w;
       const sh = settle([footprint(p, it.f, w, 0, d)], it.f);
       if (sh[0] || sh[1]) it = { ...it, c: moved(it.c, sh) };
+      // (a piece the drawing fits into its niche to the last centimetre, a corner still in the side
+      // wall: a little narrower, up to 12 %)
+      let dd = d;
+      const deep = ['shower', 'bath', 'desk'].includes(it.type);   // (these may fill the niche both ways)
+      for (let n = 0; n < 6 && !['toilet', 'basin'].includes(it.type) && !clearOf([footprint(backOf(it, dd), it.f, it.w, 0, dd)]); n++) {
+        if (deep) dd *= 0.98;
+        it = { ...it, w: it.w * 0.98, ...(deep ? { d: dd } : {}) };
+      }
     } else if (it.type === 'bed') {
       const p = backOf(it, it.l);
       const sh = settle([footprint(p, it.f, it.w, 0, it.l), ...it.stands.map(([x, y, w, d]) => footprint(backOf({ c: [x, y], f: it.f, d }), it.f, w, 0, d))], it.f);
@@ -2209,7 +2232,10 @@ function furnish(ctx) {
           light(p[0] - fy * l.x + fx * l.z, p[1] + fx * l.x + fy * l.z, l.y, true);
           break;
         }
-        ctx.addOutline(footprint([p[0] - Math.cos(f) * 0.45, p[1] - Math.sin(f) * 0.45], f, tw, 0, 0.9));
+        const tfp = footprint([p[0] - Math.cos(f) * 0.45, p[1] - Math.sin(f) * 0.45], f, tw, 0, 0.9);
+        ctx.addOutline(tfp);
+        // (the plant below stood in A23-1's table)
+        ctx.keepout.push(tfp);
       }
       if (!ctx.sparse) corners(ctx, sides.filter((s) => s !== runSide), 0.45, () => F.plant(k, M, 0.9));
       break;
@@ -2225,8 +2251,24 @@ function furnish(ctx) {
       break;
     }
     case 'storage': {
-      const s = sides.reduce((p, q) => ((q.free[0]?.len ?? 0) > (p.free[0]?.len ?? 0) ? q : p));
-      if (s.free[0] && s.across >= 0.9) place(ctx, s, (s.free[0].t0 + s.free[0].t1) / 2, s.free[0].len - 0.05, 0.4, () => F.shelving(k, M, s.free[0].len - 0.05, Math.min(H - 0.1, 2.3)));
+      // shelves along the walls, the longest first; a walk-in wardrobe (block В's, drawn as a П of
+      // shelves) gets them along every wall that leaves room to stand, short of the corners taken
+      const cand = sides.filter((s) => s.free[0] && s.free[0].len >= 0.6 && s.across >= 0.9)
+        .sort((p, q) => q.free[0].len - p.free[0].len);
+      let n = 0;
+      for (const s of cand) {
+        if (n && (room.area < 4 || s.across < 1.7)) break;
+        const { t0, t1 } = s.free[0];
+        for (const [a, b] of [[t0, t1], [t0 + 0.42, t1], [t0, t1 - 0.42], [t0 + 0.42, t1 - 0.42]]) {
+          const len = b - a - 0.05;
+          if (len < 0.6) continue;
+          if (place(ctx, s, (a + b) / 2, len, 0.4, () => F.shelving(k, M, len, Math.min(H - 0.1, 2.3)))) {
+            n++;
+            break;
+          }
+        }
+      }
+      if (!n) ctx.notes.push(`storage ${room.area} m²: no wall for shelves`);
       break;
     }
     default:

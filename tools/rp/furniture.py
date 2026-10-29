@@ -100,6 +100,15 @@ def read(pg, fr, plan, rect):
                 room['kind'] = as_kind
                 room['name'], room['ru'], room['tj'] = NAMES[as_kind]
             items += fitted
+        # (one piece read twice - a kitchen run seen from the kitchen and from the living room open
+        # to it: the bigger stays)
+        keep = []
+        for it in sorted(items, key=lambda q: -footprint(q).area):
+            if it['type'] in ('kitchen', 'bed', 'sofa', 'bath', 'shower', 'dining', 'desk', 'tv') and \
+                    any(o['type'] == it['type'] and footprint(o).intersection(footprint(it)).area > 0.05 for o in keep):
+                continue
+            keep.append(it)
+        items = keep
         apt['furniture'] = items
         out_all[ai] = items
     return out_all
@@ -379,7 +388,8 @@ def runs_of(run, R, C, solid):
     out = [run]
     tops = []
     kitchen(R, C, solid, tops)
-    first = rect_poly(run['c'], run['d'], run['w'], run['f'] + math.pi / 2).buffer(0.02)
+    # (a clear 12 cm from the first run: the viewer sets each run back on its own wall's face)
+    first = rect_poly(run['c'], run['d'], run['w'], run['f'] + math.pi / 2).buffer(0.12)
     for t in sorted(tops, key=lambda r: -r['l']):
         if t['poly'].centroid.distance(Point(*run['c'])) < 0.2:
             continue
