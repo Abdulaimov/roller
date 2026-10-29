@@ -71,6 +71,10 @@ AB_SPECS = {
     'Facade dark': ('#2a2e35', 0.42, 0.25, {}),
     'Pilaster white': ('#f2f0eb', 0.62, 0.0, {}),
     'Facade white': ('#eeebe5', 0.6, 0.0, {}),
+    # (Regnum renders 1-4: the street faces' silver cladding between the glass strips)
+    'Facade silver': ('#b4bac2', 0.35, 0.4, {}),
+    'Loggia floor': ('#8c9096', 0.6, 0.0, {}),
+    'Podium wood': ('#5a4535', 0.7, 0.0, {}),
     'Loggia beige': ('#d8b991', 0.75, 0.0, {}),
     'Mulch': ('#4a3426', 1.0, 0.0, {}),
     'Frame crown': ('#7a7f84', 0.45, 0.5, {}),

@@ -3,10 +3,11 @@
 // corridor, and wide openings between rooms of one flat (open plan, or a missing wall).
 //   node tools/ab/check_gaps.mjs [--all]     (--all: list the open-plan connections too)
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 
 const all = process.argv.includes('--all');
 const browser = await chromium.launch({
-  executablePath: process.env.CHROME ?? `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 800, height: 500 } });

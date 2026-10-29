@@ -2,9 +2,10 @@
 // material, its colour and the plan point and height hit.
 //   node tools/ab/pick.mjs APT_ID SX,SY,TX,TY,PITCH "x,y" ["x,y" ...]   (pixels of a 1200 x 800 view)
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 const [id, view, ...pix] = process.argv.slice(2);
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });

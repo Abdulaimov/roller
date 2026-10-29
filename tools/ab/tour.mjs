@@ -3,6 +3,7 @@
 //   node tools/ab/tour.mjs OUTDIR APT_ID [APT_ID ...] [--pts 2] [--dirs 8] [--w 560 --h 380]
 // OUTDIR/<id>_<n>.png (the sheets), OUTDIR/<id>.json (what each cell shows: room, point, direction)
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import fs from 'node:fs';
 
 const args = process.argv.slice(2);
@@ -12,7 +13,7 @@ const ids = rest.filter((a, i) => !a.startsWith('--') && !(rest[i - 1] ?? '').st
 const W = opt('--w', 560), H = opt('--h', 380), DIRS = opt('--dirs', 8), PTS = opt('--pts', 2);
 fs.mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: W, height: H } });

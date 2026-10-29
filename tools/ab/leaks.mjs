@@ -6,13 +6,14 @@
 // The slab above and the open air over the parapets of loggias and terraces are stood in for by
 // green pieces (the test sees only the floor's own interior).
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import fs from 'node:fs';
 
 const args = process.argv.slice(2);
 const outDir = args.includes('--out') ? args[args.indexOf('--out') + 1] : null;
 const ids = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--out');
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 800, height: 500 } });

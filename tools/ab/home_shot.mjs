@@ -1,7 +1,8 @@
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 const [out, w, h] = process.argv.slice(2);
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: +(w || 1440), height: +(h || 900) } });

@@ -5,6 +5,7 @@
 //
 //   node tools/ab/posmap.mjs VIEW OUT.f32 [--url http://localhost:5197/]
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import { writeFileSync } from 'node:fs';
 import { VIEWS } from '../views.mjs';
 
@@ -15,7 +16,7 @@ const v = VIEWS[name];
 if (!v?.cam) throw new Error(`view ${name} has no render camera`);
 const [W, H] = v.cam.size;
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true,
   args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });

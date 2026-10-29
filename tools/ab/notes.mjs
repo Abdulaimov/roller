@@ -1,9 +1,10 @@
 // What the interior fitting left out, per flat (rooms left empty to keep the way through).
 //   node tools/ab/notes.mjs [ids...]
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 const ids = process.argv.slice(2);
 const browser = await chromium.launch({
-  executablePath: process.env.CHROME ?? `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 800, height: 500 } });

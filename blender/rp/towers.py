@@ -2,10 +2,14 @@
 tools/rp/extract.py), dressed in the look of the client's renders (00_Материалы_клиента/Рендеры) and
 the developer's model (фото макета):
 
-  - the plan's walls and concrete stand as drawn (light grey-blue cladding outside); the windows are
-    the plan's windows (dark glass in black frames);
-  - white pilasters where the sheets draw them (the grey outlines on the facades), a white band at
-    every slab: the white grid of the renders;
+  - the plan's walls and concrete stand as drawn, each outer side in the finish of the face it is
+    on (SKIN): on the street faces silver cladding, and every window glass from floor to floor in a
+    dark grid, the glass running on over the slabs - from the street the towers read grey and
+    mirror-like, the windows lost in the glass (renders 1-4); the faces towards block Б graphite
+    with punched windows; the yard faces light with punched windows under a graphite top (render 5);
+  - silver-white pilasters where the sheets draw them (the grey outlines on the facades), graphite in
+    the yard faces' graphite top; a band at every slab round the loggias and on the yard and
+    graphite faces, none across the street faces;
   - balconies: white slab edge, glass railing; their back walls warm wood (the lit loggias of the
     night renders); on Б's face to кӯчаи Ҳусейнзода the balconies are glazed floor to ceiling (the
     big glass corner of renders 1 and 2);
@@ -19,13 +23,32 @@ import math
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import unary_union
 
-from complex.geom import MeshBuilder, get_collection, log_tree, make_object
+from complex.geom import MeshBuilder, ccw, get_collection, log_tree, make_object
 from complex.towers import add_rails, pick_material
 
 from .config import BLOCKS, FIRST_FLAT_FLOOR, SLAB, height, level
 
-WALL = {'A': 'Facade white', 'B': 'Facade white', 'V': 'Facade white'}   # (the model's white stone)
+# The finish of each face of a block, on the sheets' axes: +x faces кӯчаи Ҳусейнзода, +y кӯчаи
+# Нарзиқулова (28.10.2026, the user on renders 1-4: «the house is all white, there it is grey,
+# mirror-like; on block В you can hardly see a window»):
+#   street - silver cladding, the windows glass floor to floor, no white band across;
+#   dark   - graphite cladding, punched windows: А's and В's faces towards Б (renders 1, 4);
+#   yard   - light cladding, punched windows (render 5).
+SKIN = {
+    'A': {'+x': 'street', '+y': 'dark', '-x': 'yard', '-y': 'yard'},
+    'B': {'+x': 'street', '+y': 'street', '-x': 'yard', '-y': 'yard'},
+    'V': {'+x': 'dark', '+y': 'street', '-x': 'yard', '-y': 'yard'},
+}
+# the yard faces' graphite top: floors under the crown (render 5: about five on А's yard face and
+# seven on its south end, six on В's yard face; ten on В's west end, render 3 too)
+DARK_TOP = {'A': {'-x': 5, '-y': 7}, 'B': {}, 'V': {'-y': 6, '-x': 10}}
+CLAD = {'street': 'Facade silver', 'dark': 'Facade dark', 'yard': 'Facade white'}
+INNER = 'Facade white'   # the walls' sides indoors (seen only in the cut-away views)
+SIDES = {'+x': (1.0, 0.0), '-x': (-1.0, 0.0), '+y': (0.0, 1.0), '-y': (0.0, -1.0)}
 SILL, HEAD = 0.45, 0.35
+# the balconies' glass rail stands on a low curb over the slab's edge (renders 1, 4, 6: a thin white
+# edge, tinted glass above it - not the 0.4 m white upstand of the shared rail)
+LOGGIA_CURB = 0.1
 PANORAMIC = 2.4   # m: windows this long on the sheets are the model's dark curtain-glass strips
 GLASS_FACE = {'B': lambda x, y: x > 12.5}   # Б: the balconies on the east face are glazed full height
 SOLAR = {'A': 4, 'B': 2, 'V': 9}   # PV arrays on the roof (two rows of panels each), counted on renders 4 and 5
@@ -65,19 +88,54 @@ def axis(q):
     return (ct.x, ct.y), u, v, l1, l2
 
 
-def pane(mb, c, u, v, L, t, off, z0, z1, glass, frame='Frame dark', mullion=1.5, fw=0.06):
-    """a glazed opening across a wall: glass at offset `off` across the wall, a frame round it and
-    mullions about every `mullion` metres"""
+def pane(mb, c, u, v, L, t, off, z0, z1, glass, frame='Frame dark', mullion=1.5, fw=0.06, transom=None):
+    """a glazed opening across a wall: glass at offset `off` across the wall, a frame round it,
+    mullions about every `mullion` metres and a transom `transom` above the bottom"""
     cx, cy = c[0] + v[0] * off, c[1] + v[1] * off
     rot = math.atan2(u[1], u[0])
     mb.box(cx, cy, z0, L, 0.03, z1 - z0, glass, rot=rot)
-    for zz in (z0, z1 - fw):
+    for zz in (z0, z1 - fw) + ((z0 + transom,) if transom else ()):
         mb.box(cx, cy, zz, L, 0.09, fw, frame, rot=rot)
     n = max(1, round(L / mullion))
     for k in range(n + 1):
         s = -L / 2 + L * k / n
         s = max(-L / 2 + fw / 2, min(L / 2 - fw / 2, s))
         mb.box(cx + u[0] * s, cy + u[1] * s, z0, fw, 0.09, z1 - z0, frame, rot=rot)
+
+
+def facing(bounds, m, n):
+    """the face of the block a surface at m looking along n is on: the nearest side of the block's
+    box among those it does not turn its back on (so the walls of В's middle slot and of the
+    setbacks go with the face they are cut into)"""
+    x0, y0, x1, y1 = bounds
+    d = {'+x': x1 - m[0], '-x': m[0] - x0, '+y': y1 - m[1], '-y': m[1] - y0}
+    return min((s for s, (sx, sy) in SIDES.items() if n[0] * sx + n[1] * sy > -0.05), key=lambda s: d[s])
+
+
+def skin_of(key, f, top_floor):
+    """the finish of each face on floor f: SKIN, with the graphite top of the yard faces"""
+    s = dict(SKIN[key])
+    for face, n in DARK_TOP[key].items():
+        if f > top_floor - n:
+            s[face] = 'dark'
+    return s
+
+
+def clad_prism(mb, g, h, finish):
+    """a wall or a column floor to ceiling, each side in the finish of what it looks onto
+    (finish(midpoint, outward normal) -> material)"""
+    g = ccw(g)
+    for ring in [g.exterior] + list(g.interiors):
+        c = list(ring.coords)[:-1]
+        u = 0.0
+        for a, b in zip(c, c[1:] + c[:1]):
+            L = math.dist(a, b)
+            if L < 1e-6:
+                continue
+            n = ((b[1] - a[1]) / L, -(b[0] - a[0]) / L)
+            mb.quad_wall(a, b, 0.0, h, finish(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), n), u0=u)
+            u += L
+    mb.polygon_face(g, h, INNER, up=True)
 
 
 def outer_edges(g, outside):
@@ -136,42 +194,108 @@ def solar_arrays(mb, free, z, n, cols=4, pw=1.0, pl=1.7, tilt=18):
                 mb.box(cx, yy, z, W, 0.05, hh, 'Frame dark')
 
 
-def facade_floor(mb, block, plan, h, top=False, dark=False):
+def facade_floor(mb, block, plan, h, skin, top=False):
     key = block['key']
     enc = P(plan['enclosure'])
+    bounds = enc.bounds
     outside = box(*enc.buffer(30).bounds).difference(enc)
     out_rooms = outdoor_rooms(plan)
     outdoor = unary_union(out_rooms) if out_rooms else Polygon()
-    air = outside.union(outdoor)
     glass_face = GLASS_FACE.get(key, lambda x, y: False)
-    # (renders 1-4: the top floors of blocks А and В clad in graphite under the white crown)
-    wall_mat = 'Facade dark' if dark else WALL[key]
-    # walls and concrete as drawn (the inner ones show through the windows); the back walls of the
-    # balconies light, as on the renders (warm wood there read as red from afar)
+    rim = enc.exterior
+    # recesses inside the sheet's outline that open onto it - no room, hall, stair, shaft or wall
+    # in them (А's yard face: the end of the corridor and the stair, 2 m deep, a dark slot the
+    # height of the block on render 5; Б's third floor: the corner under the glass): their walls
+    # are outer walls, graphite
+    used = unary_union([P(r['poly']) for a in plan['apartments'] for r in a['rooms'] + a['balconies']]
+                       + [P(c) for c in plan['common']] + [P(lf['shaft']) for lf in plan.get('lifts', [])]
+                       + [P(w) for w in plan['walls'] + plan['struct'] if len(w) >= 3])
+    wells = [q for q in parts(enc.buffer(-0.05).difference(used.buffer(0.08))) if q.area > 3 and q.distance(rim) < 0.1]
+    recess = unary_union([q.buffer(0.1, join_style='mitre') for q in wells]) if wells else Polygon()
+    air = outside.union(outdoor).union(recess)
+
+    def finish(m, n):
+        """what a wall's side at m looking along n is clad in"""
+        p = Point(m[0] + n[0] * 0.15, m[1] + n[1] * 0.15)
+        if outside.contains(p):
+            return CLAD[skin[facing(bounds, m, n)]]
+        if recess.contains(p):
+            return CLAD['dark']
+        if not outdoor.is_empty and (outdoor.contains(p) or outdoor.distance(Point(m)) < 0.4):
+            # the back walls of the loggias and their jambs: warm wood (renders 1, 2, 4, 6)
+            return 'Loggia beige'
+        q = Point(m)
+        if rim.distance(q) < 0.6:
+            # a window's jamb, the reveal: the face's own finish
+            e = rim.interpolate(rim.project(q))
+            d = (e.x - m[0], e.y - m[1])
+            k = math.hypot(*d) or 1.0
+            return CLAD[skin[facing(bounds, m, (d[0] / k, d[1] / k))]]
+        return INNER
+
+    # walls and concrete as drawn, each side in its finish; nothing stands in a window's or a
+    # glazing's opening (the sheets' window symbol - the frame and sill lines across the opening -
+    # came out of the plans as thin walls there, floor to ceiling in front of the glass)
+    # (the opening through the whole wall: the window's rectangle 5 cm deeper both ways - an outline
+    # 1.3 cm thick ran across the glass of В's windows - but no wider, the piers keep their ends)
+    def through(q):
+        c, u, v, L, t = axis(P(q))
+        a, b = L / 2 + 0.005, t / 2 + 0.05
+        return Polygon([(c[0] + u[0] * su * a + v[0] * sv * b, c[1] + u[1] * su * a + v[1] * sv * b)
+                        for su, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+    openings = unary_union([through(q) for q in plan['windows'] + plan['glazing'] if len(q) >= 3 and P(q).area > 0.004])
     for w in plan['walls'] + plan['struct']:
-        g = P(w)
-        if g.area < 0.01:
+        g0 = P(w)
+        if g0.area < 0.01:
             continue
-        # (the back walls of the loggias: warm beige, as on the developer's model)
-        back = not outdoor.is_empty and g.distance(outdoor) < 0.06 and g.distance(outside) > 0.3
-        mb.prism(g, 0.0, h, 'Loggia beige' if back else wall_mat, 'Loggia beige' if back else wall_mat)
-    # windows: dark glass in black frames, wall below and above
+        for g in parts(g0.difference(openings)):
+            if g.area < 0.01:
+                continue
+            # (a sliver of the sheet's outline stroke along the facade or a loggia's open side, 2 cm
+            # thick and metres long, is no wall: it stood floor to ceiling across loggias and in
+            # front of Б's glass corner - V_typ had 24 by the loggias, 85 m in all)
+            L = axis(g)[3]
+            if L > 0.4 and g.area / L < 0.05 and (rim.distance(g) < 0.1 or (not outdoor.is_empty and outdoor.distance(g) < 0.1)):
+                continue
+            clad_prism(mb, g, h, finish)
+    # the loggias' downlights: two round lamps in each loggia's ceiling, lit at night (renders 1-3:
+    # the warm light in the loggias is theirs, the wood itself stays a dark brown)
+    for g in out_rooms:
+        c, u, v, L, t = axis(g)
+        k = 2 if L > 2.4 else 1
+        for i in range(k):
+            s = ((i + 0.5) / k - 0.5) * L * 0.6
+            mb.box(c[0] + u[0] * s, c[1] + u[1] * s, h - 0.27, 0.16, 0.16, 0.02, 'Night line', rot=math.atan2(u[1], u[0]))
+    # windows: dark glass in black frames
     for wq in plan['windows']:
         g = P(wq)
         c, u, v, L, t = axis(g)
         if L < 0.3:
             continue
         to_balcony = not outdoor.is_empty and g.distance(outdoor) < 0.12
-        # the side the outside is on
+        # the side the outside is on, and the face that is
         s_out = 1 if air.contains(Point(c[0] + v[0] * (t / 2 + 0.15), c[1] + v[1] * (t / 2 + 0.15))) else -1
+        n_out = (v[0] * s_out, v[1] * s_out)
+        sk = skin[facing(bounds, (c[0] + n_out[0] * t / 2, c[1] + n_out[1] * t / 2), n_out)]
+        if not to_balcony and sk == 'street':
+            # the street faces (renders 1-4): glass floor to floor in a dark grid - mullions under a
+            # metre apart, a transom at the rail's height - just in front of the slab's edge, so
+            # the strips run on from floor to floor and the windows are lost in the glass
+            pane(mb, c, u, v, L, t, s_out * (t / 2 - 0.03), 0.0, h, 'Window glass', frame='Frame dark',
+                 mullion=0.9, transom=1.1)
+            continue
+        wall_mat = CLAD[sk]
         if L >= PANORAMIC and not to_balcony:
             # a panoramic strip (the model's dark curtain glass): floor to floor in a black grid,
-            # a dark panel over the slab's white band
+            # a dark panel over the slab's band
             pane(mb, c, u, v, L, t, s_out * (t / 2 - 0.08), 0.0, h, 'Window glass', frame='Frame dark', mullion=1.0)
-            # (flush with the white band it hides: 1 cm proud of it, no ledge)
+            # (flush with the band it hides: 1 cm proud of it, no ledge)
             fc = (c[0] + v[0] * s_out * (t / 2 + 0.055), c[1] + v[1] * s_out * (t / 2 + 0.055))
             mb.box(fc[0], fc[1], -0.33, L - 0.02, 0.11, 0.48, 'Facade dark', rot=math.atan2(u[1], u[0]))
             continue
+        if to_balcony:
+            # (a door or window onto a loggia: wood over it, as the loggia's back wall)
+            wall_mat = 'Loggia beige'
         sill = 0.0 if to_balcony else SILL
         if sill > 0:
             mb.prism(g, 0.0, sill, wall_mat, wall_mat)
@@ -188,7 +312,7 @@ def facade_floor(mb, block, plan, h, top=False, dark=False):
         on_balcony = not outdoor.is_empty and g.distance(outdoor) < 0.15
         if on_balcony and not glass_face(*c):
             for a, b in outer_edges(g, outside) or [((c[0] - u[0] * L / 2, c[1] - u[1] * L / 2), (c[0] + u[0] * L / 2, c[1] + u[1] * L / 2))]:
-                add_rails(mb, [[a, b]], 0.0, post_step=0)
+                add_rails(mb, [[a, b]], 0.0, post_step=0, fascia=LOGGIA_CURB)
         else:
             pane(mb, c, u, v, L, t, 0.0, 0.0, h - 0.05, 'Tower glass', frame='Frame dark', mullion=1.0)
     # balcony parapets: glass railings (or, on Б's glazed face, glass to the ceiling)
@@ -203,17 +327,79 @@ def facade_floor(mb, block, plan, h, top=False, dark=False):
             pane(mb, c, u, v, L, t, 0.0, 0.0, h - 0.05, 'Tower glass', frame='Frame dark', mullion=1.0)
         else:
             for a_, b_ in outer_edges(g, outside) or [(a, b)]:
-                add_rails(mb, [[a_, b_]], 0.0, post_step=0)
-    # the white pilasters (grey outlines on the sheets), through the slab bands
+                add_rails(mb, [[a_, b_]], 0.0, post_step=0, fascia=LOGGIA_CURB)
+    # the white pilasters (grey outlines on the sheets), through the slab bands; in the yard faces'
+    # graphite top graphite too (render 5 reads a dark block there; the sheets' pilasters are a
+    # metre wide and hid the dark between them from any angle)
     for q in plan.get('pilasters', []):
-        mb.prism_chamfer(P(q), -0.25, h, 'Stone white', 'Stone white' if top else None, None, c=0.02)
+        g = P(q)
+        c = g.centroid
+        e = rim.interpolate(rim.project(c))
+        d = (c.x - e.x, c.y - e.y)
+        k = math.hypot(*d)
+        mat = 'Pilaster white'
+        if k > 1e-6:
+            n = (d[0] / k, d[1] / k) if not enc.contains(c) else (-d[0] / k, -d[1] / k)
+            face = facing(bounds, (c.x, c.y), n)
+            if skin[face] == 'dark' and SKIN[key][face] != 'dark':
+                mat = 'Facade dark'
+        mb.prism_chamfer(g, -0.25, h, mat, mat if top else None, None, c=0.02)
 
 
-def slab_mesh(mb, plan, h):
+def loggia_fronts(plan, enc):
+    """the loggias and the strips in front of their open sides out to past the facade line (the
+    rooms stop up to 0.3 m short of it, behind the parapet): where the slab's band is the loggias'
+    slab edge"""
+    outside = box(*enc.buffer(30).bounds).difference(enc)
+    zones = []
+    for g in outdoor_rooms(plan):
+        zones.append(g.buffer(0.02, join_style='mitre'))
+        pts = list(ccw(g).exterior.coords)
+        for a, b in zip(pts, pts[1:]):
+            L = math.dist(a, b)
+            if L < 0.3:
+                continue
+            n = ((b[1] - a[1]) / L, -(b[0] - a[0]) / L)
+            m = ((a[0] + b[0]) / 2 + n[0] * 0.5, (a[1] + b[1]) / 2 + n[1] * 0.5)
+            if outside.contains(Point(m)):
+                zones.append(Polygon([a, b, (b[0] + n[0] * 0.45, b[1] + n[1] * 0.45), (a[0] + n[0] * 0.45, a[1] + n[1] * 0.45)]))
+    return unary_union(zones) if zones else Polygon()
+
+
+def slab_mesh(mb, plan, h, skin):
     enc = P(plan['enclosure'])
     mb.prism(enc.buffer(-0.04, join_style='mitre'), -0.25, SLAB, 'Stone white', 'Shop floor', 'Stone white')
+    # (the loggias' floor: grey porcelain, so they read as recesses, not white shelves, from above)
+    for g in outdoor_rooms(plan):
+        mb.polygon_face(g.buffer(-0.01, join_style='mitre'), SLAB + 0.004, 'Loggia floor')
     ring = enc.buffer(0.1, join_style='mitre').difference(enc.buffer(-0.04, join_style='mitre'))
-    mb.prism_chamfer(ring, -0.32, 0.14, 'White band', 'White band', 'White band', c=0.02)
+    # the band at the slab: white round the loggias (their slab edges) and on the yard faces,
+    # graphite on the graphite faces, none across the street faces (renders 1-4: the glass and the
+    # cladding run on over the slabs there)
+    loggias = loggia_fronts(plan, enc)
+    bounds = enc.bounds
+    cut, dark = [], []
+    pts = list(ccw(enc).exterior.coords)
+    for a, b in zip(pts, pts[1:]):
+        L = math.dist(a, b)
+        if L < 1e-6:
+            continue
+        ux, uy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
+        n = (uy, -ux)
+        s = skin[facing(bounds, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), n)]
+        if s == 'yard':
+            continue
+        # the band's stretch along this edge (a little past its ends, so no corner is left over)
+        e0 = (a[0] - ux * 0.12, a[1] - uy * 0.12)
+        e1 = (b[0] + ux * 0.12, b[1] + uy * 0.12)
+        q = Polygon([(e0[0] - n[0] * 0.1, e0[1] - n[1] * 0.1), (e1[0] - n[0] * 0.1, e1[1] - n[1] * 0.1),
+                     (e1[0] + n[0] * 0.2, e1[1] + n[1] * 0.2), (e0[0] + n[0] * 0.2, e0[1] + n[1] * 0.2)])
+        (cut if s == 'street' else dark).append(q)
+    keep = ring.difference(unary_union(cut).difference(loggias)) if cut else ring
+    dark_g = unary_union(dark).difference(loggias) if dark else Polygon()
+    mb.prism_chamfer(keep.difference(dark_g), -0.32, 0.14, 'White band', 'White band', 'White band', c=0.02)
+    if not dark_g.is_empty:
+        mb.prism_chamfer(keep.intersection(dark_g), -0.32, 0.14, 'Facade dark', 'Facade dark', 'Facade dark', c=0.02)
 
 
 def crown(mb, block, plan, zr):
@@ -291,12 +477,12 @@ def build_block(key, mats, root_col, plans):
     for f in range(FIRST_FLAT_FLOOR, top_floor + 1):
         pk = b['plans'][f]
         z, h = level(f), height(f)
-        dark = key in ('A', 'V') and f > top_floor - 3
-        ck = (pk, f == top_floor, dark)
+        skin = skin_of(key, f, top_floor)
+        ck = (pk, f == top_floor, tuple(sorted(skin.items())))
         if ck not in cache:
             sm, wm = MeshBuilder(), MeshBuilder()
-            slab_mesh(sm, plans[pk], h)
-            facade_floor(wm, b, plans[pk], h, top=f == top_floor, dark=dark)
+            slab_mesh(sm, plans[pk], h, skin)
+            facade_floor(wm, b, plans[pk], h, skin, top=f == top_floor)
             nm = f'{key} {pk} {len(cache)}'
             cache[ck] = (sm.to_mesh(nm + ' slab', mats), wm.to_mesh(nm + ' walls', mats))
         sm, wm = cache[ck]

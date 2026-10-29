@@ -10,12 +10,12 @@ RAIL = 1.05        # glass rail height
 FASCIA = 0.42      # solid white upstand on the balcony edge, under the glass rail
 
 
-def add_rails(mb, segs, z, h=RAIL, mat='Railing glass', post_step=1.2):
+def add_rails(mb, segs, z, h=RAIL, mat='Railing glass', post_step=1.2, fascia=FASCIA):
     for seg in segs:
         # solid white upstand, then glass
         if len(seg) > 1:
-            mb.tube(seg, [z - 0.05] * len(seg), [z + FASCIA] * len(seg), 0.16, 'White band')
-        mb.ribbon(seg, z + FASCIA, z + h, mat, double=True)
+            mb.tube(seg, [z - 0.05] * len(seg), [z + fascia] * len(seg), 0.16, 'White band')
+        mb.ribbon(seg, z + fascia, z + h, mat, double=True)
         # slim metal handrail on posts (glass held between them)
         zs0 = [z + h - 0.04] * len(seg)
         zs1 = [z + h + 0.02] * len(seg)

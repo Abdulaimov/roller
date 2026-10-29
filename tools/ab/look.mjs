@@ -2,12 +2,13 @@
 //   node tools/ab/look.mjs APT_ID OUT.png SX SY TX TY [PITCH] [--num 214 --tower B]
 // With --num the flat is found by its number (as shown on the site) in that block.
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 
 const args = process.argv.slice(2);
 const opt = (k) => (args.includes(k) ? args[args.indexOf(k) + 1] : null);
 const [id, out, sx, sy, tx, ty, pitch] = args;
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });

@@ -4,13 +4,14 @@
 //   node tools/ab/plan_view.mjs APT_ID OUT.png [--walk]
 //   node tools/ab/plan_view.mjs --all OUTDIR      # one flat of every layout: OUTDIR/<id>.png
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const all = process.argv.includes('--all');
 const [id0, out0] = all ? [null, process.argv[process.argv.indexOf('--all') + 1]] : process.argv.slice(2);
 const walk = process.argv.includes('--walk');
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 1000, height: 1000 } });

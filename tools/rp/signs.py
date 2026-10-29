@@ -18,11 +18,14 @@ OUT = os.path.join(ROOT, 'public', 'signs')
 ROT = -49.5   # the sheet's frame on the ground (blender/rp/config.py)
 FONT = '/System/Library/Fonts/HelveticaNeue.ttc'
 
-# (name, face, where along the face 0..1 from block Б's street corner, the span it may take, m)
+# (name, face, where along the face 0..1 from block Б's street corner, the span it may take, m);
+# on the east face the place is the sheet's y instead: render 6 has LACOSTA on Б's shop front just
+# short of the step out to block А, CONCEPT and then ZARA (further from the corner) on А's (28.10.2026:
+# they were all three on А's, in the reverse order - Б's front stands 4 m back and was not found)
 SIGNS = [
     ('CHANEL', 'north', 0.10, 6.0), ('LOUIS VUITTON', 'north', 0.26, 7.0), ('DIOR', 'north', 0.42, 5.0),
     ('MUDO', 'north', 0.62, 5.0), ('PARKING', 'north', 0.86, 5.0),
-    ('ZARA', 'east', 0.14, 5.0), ('CONCEPT', 'east', 0.36, 6.0), ('LACOSTA', 'east', 0.70, 6.0),
+    ('LACOSTA', 'east', -11.5, 6.0), ('CONCEPT', 'east', -23.5, 6.0), ('ZARA', 'east', -28.5, 5.0),
 ]
 Z, H = 4.05, 0.62   # the middle of the sign over the ground floor's windows (4.5 m floor), its height
 
@@ -69,10 +72,10 @@ def main():
         line, s0, s1 = faces[face]
         u = ((line.coords[1][0] - line.coords[0][0]) / line.length, (line.coords[1][1] - line.coords[0][1]) / line.length)
         n = (0.0, 1.0) if face == 'north' else (1.0, 0.0)
-        m = line.interpolate(s0 + at * (s1 - s0))
+        m = line.interpolate(s0 + at * (s1 - s0)) if face == 'north' else Point(x1, at)
         # onto the podium's own face there: in from the line until the wall is met
         d = 0.0
-        while d < 6 and not sheet.contains(Point(m.x - n[0] * (d + 0.05), m.y - n[1] * (d + 0.05))):
+        while d < 8 and not sheet.contains(Point(m.x - n[0] * (d + 0.05), m.y - n[1] * (d + 0.05))):
             d += 0.05
         mid = (m.x - n[0] * d, m.y - n[1] * d)
         a = (mid[0] - u[0] * span / 2 + n[0] * 0.15, mid[1] - u[1] * span / 2 + n[1] * 0.15)
@@ -83,7 +86,7 @@ def main():
         A, B, N = rot(*a, ROT), rot(*b, ROT), rot(*n, ROT)
         out.append(dict(file=artwork(name), a=[round(v, 3) for v in A], b=[round(v, 3) for v in B],
                         n=[round(v, 4) for v in N], z=Z, h=H, margin=0.2, kind='sign'))
-        print(f'{name:14s} {face}: {at:.2f} of {s1 - s0:.1f} m, {d:.2f} m in from the line')
+        print(f'{name:14s} {face}: {at:.2f}, {d:.2f} m in from the line, sheet ({mid[0]:.1f}, {mid[1]:.1f})')
     json.dump(dict(set='regnum', sets=dict(regnum=out)), open(os.path.join(OUT, 'signs.json'), 'w'), indent=1)
     print('wrote', len(out), 'signs')
 

@@ -2,6 +2,7 @@
 //   node tools/ab/svg_raster.mjs tools/ab/brand_logos build/brand_png [height=600]
 // Each SVG is drawn as an <img> (no scripts run) at the given height (no wider than 8000 px).
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import fs from 'fs';
 import path from 'path';
 
@@ -9,7 +10,7 @@ const [src, out, height = '600'] = process.argv.slice(2);
 const H = Number(height);
 fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 8200, height: H + 40 } });

@@ -10,6 +10,7 @@
 // Moving: a few cars on the avenue (each laps exactly twice in 70 s), the trees in a breeze (periods
 // dividing 70 s): the film loops without a jump. The day-to-night version runs 15:30 -> 22:20.
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import fs from 'node:fs';
 import { FPS, hourAt, timeline } from './tv_shots.mjs';
 
@@ -25,7 +26,7 @@ const samples = +opt('--samples', 4);
 const { shots, length } = timeline();
 
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });

@@ -3,11 +3,12 @@
 // left without a label.
 //   node tools/ab/check_labels.mjs [--shots DIR]   (DIR: a picture of every unique layout)
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import fs from 'node:fs';
 const args = process.argv.slice(2);
 const shots = args.includes('--shots') ? args[args.indexOf('--shots') + 1] : null;
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 let bad = 0;

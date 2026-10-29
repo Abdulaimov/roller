@@ -2,12 +2,13 @@
 // point to stand at and one to look at, at eye height, optionally pitched (radians, + up).
 //   node tools/ab/looks.mjs APT_ID OUTDIR "SX,SY,TX,TY[,PITCH]" ...   → OUTDIR/APT_ID_<n>.png
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import fs from 'node:fs';
 
 const [id, outDir, ...views] = process.argv.slice(2);
 fs.mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });

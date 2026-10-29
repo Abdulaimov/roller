@@ -2,6 +2,7 @@
 //   node tools/ab/sign_shots.mjs <out dir> [name ...]
 // Cameras in site metres (x east, y north, z up): [from x, y, z, to x, y, z, hours].
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import fs from 'fs';
 
 const VIEWS = {
@@ -20,7 +21,7 @@ const VIEWS = {
 const [out, ...names] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });

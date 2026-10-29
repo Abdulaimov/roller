@@ -1,7 +1,9 @@
 import { chromium } from 'playwright-core';
-const [out, px, py, pz, tx, ty, tz] = process.argv.slice(2);
+import CHROME from './chrome.mjs';
+// node tools/ab/view_shot.mjs OUT px py pz tx ty tz [hour] - camera at site (px, py), height pz, looking at (tx, ty, tz)
+const [out, px, py, pz, tx, ty, tz, hour] = process.argv.slice(2);
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 1400, height: 860 } });
@@ -16,8 +18,9 @@ await page.evaluate(async (v) => {
   const a = cfg.toScene(v[0], v[1]), b = cfg.toScene(v[3], v[4]);
   app.camera.clearViewOffset();
   app.setView([a.x, v[2], a.z], [b.x, v[5], b.z]);
+  if (v[6]) app.setHours(v[6]);
   await new Promise((r) => setTimeout(r, 2500));
-}, [px, py, pz, tx, ty, tz].map(Number));
+}, [px, py, pz, tx, ty, tz, hour ?? 0].map(Number));
 await page.screenshot({ path: out });
 console.log('wrote', out);
 await browser.close();

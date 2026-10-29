@@ -3,9 +3,10 @@
 // inside the flat at its entrance door, how many drawn pieces it has, and what was given up.
 //   node tools/ab/check_layouts.mjs
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 
 const browser = await chromium.launch({
-  executablePath: process.env.CHROME ?? `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 800, height: 500 } });

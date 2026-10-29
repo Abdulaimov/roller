@@ -238,12 +238,30 @@ const INTERIOR = /* glsl */ `
     }
   }`;
 
-function patch(mat, { vary = 0, detile = false, leafy = false, tint = null, facade = null, interior = null, night = null } = {}) {
-  if (!vary && !detile && !leafy && !facade && !interior) return;
+// joints: the grid of a clad facade (metal or stone panels), thin dark lines in world space every
+//         [along, up] metres, [line] wide, the rows from the level [z0]; fading out far off
+const JOINTS = /* glsl */ `
+  {
+    vec3 fn = normalize(vWorldNormal);
+    if (abs(fn.y) < 0.5) {
+      vec2 ft = normalize(vec2(-fn.z, fn.x));
+      vec2 q = vec2(dot(vWorldPos.xz, ft) / uJoint.x, (vWorldPos.y - uJoint.w) / uJoint.y);
+      vec2 fw = max(fwidth(q), vec2(1e-4));
+      vec2 lw = 0.5 * uJoint.z / uJoint.xy;
+      vec2 dd = abs(fract(q + 0.5) - 0.5);
+      vec2 a = 1.0 - smoothstep(lw, lw + fw, dd);
+      a *= 1.0 - smoothstep(0.08, 0.3, max(fw.x, fw.y));
+      diffuseColor.rgb *= 1.0 - 0.4 * max(a.x, a.y);
+    }
+  }`;
+
+function patch(mat, { vary = 0, detile = false, leafy = false, tint = null, facade = null, interior = null, night = null, joints = null } = {}) {
+  if (!vary && !detile && !leafy && !facade && !interior && !joints) return;
   const tintColor = new THREE.Color(tint ?? '#ffffff');
   mat.onBeforeCompile = (sh) => {
     lampChunk(sh);
     sh.uniforms.uVary = { value: vary };
+    sh.uniforms.uJoint = { value: new THREE.Vector4(...(joints ?? [1, 1, 0, 0])) };
     sh.uniforms.uTint = { value: tintColor };
     sh.uniforms.uFacade = { value: new THREE.Vector3(...(facade ?? [3, 3, 0])) };
     // interior: [width, storey, depth, floor 3 level, daylight in the room, curtains, pane tilt]
@@ -270,7 +288,7 @@ function patch(mat, { vary = 0, detile = false, leafy = false, tint = null, faca
           on = mat3(instanceMatrix) * on; // the typical floors are instances, turned with their block
         #endif
         vWorldNormal = normalize(mat3(modelMatrix) * on);`);
-    let frag = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;\nuniform float uVary;\nuniform vec3 uTint;\nuniform vec3 uFacade;\nuniform vec4 uInt;\nuniform vec3 uInt2;\nuniform float uMirror;\nuniform float uRefl;\nuniform float uNight;\nuniform vec4 uNightLamp;\nuniform float uNightDim;\n${NOISE}`);
+    let frag = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;\nuniform float uVary;\nuniform vec3 uTint;\nuniform vec3 uFacade;\nuniform vec4 uInt;\nuniform vec3 uInt2;\nuniform float uMirror;\nuniform float uRefl;\nuniform float uNight;\nuniform vec4 uNightLamp;\nuniform float uNightDim;\nuniform vec4 uJoint;\n${NOISE}`);
     if (detile) {
       frag = frag.replace('#include <map_fragment>', `
         #ifdef USE_MAP
@@ -287,7 +305,7 @@ function patch(mat, { vary = 0, detile = false, leafy = false, tint = null, faca
         float s = fbm(vWorldPos.xz * 0.31 + 11.0);
         diffuseColor.rgb *= 1.0 + uVary * ((m - 0.5) * 1.6 + (s - 0.5) * 0.6);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * uTint, smoothstep(0.45, 0.8, m));
-      }`);
+      }${joints ? JOINTS : ''}`);
     if (interior) {
       frag = frag
         .replace('#include <color_fragment>', `#include <color_fragment>\n${INTERIOR}\n  diffuseColor.rgb = vec3(0.0);`)
@@ -317,7 +335,7 @@ function patch(mat, { vary = 0, detile = false, leafy = false, tint = null, faca
     }
     sh.fragmentShader = frag;
   };
-  mat.customProgramCacheKey = () => `v${vary}d${+detile}l${+leafy}i${interior ?? ''}f${facade ?? ''}${tintColor.getHexString()}`;
+  mat.customProgramCacheKey = () => `v${vary}d${+detile}l${+leafy}i${interior ?? ''}f${facade ?? ''}j${joints ?? ''}${tintColor.getHexString()}`;
 }
 
 // ---------- the table ----------
@@ -336,7 +354,7 @@ const LIB = {
   'Terracotta dark': { set: 'plaster', tile: 2.2, color: '#6f4132', roughness: 1, normal: 0.55, vary: 0.05, env: 0.6 },
   // white stone and render: the plaster set's relief and roughness, no colour map (its grey would
   // make the white stone grey; the renders' white is white)
-  'White band': { set: 'plaster', mapless: true, tile: 2.2, color: '#f1efea', roughness: 0.6, normal: 0.15, vary: 0.01, env: 1.0 },
+  'White band': { set: 'plaster', mapless: true, tile: 2.2, color: '#e4e6e9', roughness: 0.6, normal: 0.15, vary: 0.01, env: 1.0 },
   // (Regnum renders 4, 5: the roof plant rooms mid grey under a white cap)
   'Plant room': { set: 'plaster', mapless: true, tile: 2.2, color: '#8e9297', roughness: 0.8, normal: 0.2, env: 0.6 },
   'Stone fin': { set: 'concrete', tile: 3, color: '#e3d6c2', roughness: 0.9, normal: 0.5 },
@@ -350,7 +368,9 @@ const LIB = {
   // glass: dark body seen through, reflections of the sky do the rest; slight tints only
   // (28.10.2026, Regnum renders 1-6: blue-grey coated glass with the sky in it, not the near-black
   // of before - the rooms behind it show, the reflection does most of the work)
-  'Window glass': { ...glass('#000000', 0.03, { env: 1.3, tint: '#a9bdcd', interior: [2.9, 3.5, 4.2, 12.0, 0.22, 0.3, 0.01, 0.34, 1.2], specular: '#dbe6ee' }), physical: { ior: 1.9 } },
+  // (28.10.2026, the user on renders 1-4: «grey, mirror-like, the windows hardly seen»: more of the
+  // sky in it, the rooms behind dimmer, blue-grey)
+  'Window glass': { ...glass('#000000', 0.03, { env: 1.6, tint: '#aab8c8', interior: [2.9, 3.5, 4.2, 12.0, 0.15, 0.3, 0.01, 0.62, 1.45], specular: '#dbe6ee' }), physical: { ior: 1.9 } },
   // block A (renders 1, 2, 4): dark blue-green coated glass, the rooms behind it readable (curtains,
   // furniture, a light here and there), the sky in it strongest towards the top and at grazing angles
   // (22.10.2026: darker, as on renders 1, 2 and 4: a charcoal-blue body, the sky in it, not a pale blue face)
@@ -361,16 +381,26 @@ const LIB = {
   // the slab blocks (renders 1-3): golden sandstone cornices and bay frames; the narrow tall
   // glazing light grey, the dark strips dark green, the corner bays blue
   // the facade's dark ground and white grid (the developer's model)
-  'Facade dark': { set: 'concrete', tile: 2.5, color: '#2a2e35', roughness: 0.42, metalness: 0.25, normal: 0.15, vary: 0.01, env: 1.1 },
-  'Pilaster white': { set: 'plaster', mapless: true, tile: 2.2, color: '#f2f0eb', roughness: 0.62, normal: 0.18, vary: 0.012, env: 0.9 },
+  // (Regnum renders 1, 4: the graphite faces towards block Б and the yard faces' top - metal panels
+  // in a grid of joints, a little sheen)
+  'Facade dark': { set: 'plaster', mapless: true, tile: 2.2, color: '#4c4c52', roughness: 0.45, metalness: 0.12, normal: 0.08, vary: 0.01, env: 0.9, joints: [1.2, 1.1, 0.014, 9.0] },
+  // (Regnum renders 1-4: the pilasters silver-white with a sheen, not chalk white)
+  'Pilaster white': { set: 'plaster', mapless: true, tile: 2.2, color: '#d6dade', roughness: 0.42, metalness: 0.15, normal: 0.1, vary: 0.012, env: 1.0 },
   // (Regnum renders 1-4: the wall panels between the white pilasters a light cool grey - metal
   // cassettes, a little sheen - not white)
   'Facade white': { set: 'plaster', mapless: true, tile: 2.2, color: '#d2d6db', roughness: 0.5, metalness: 0.08, normal: 0.12, vary: 0.01, env: 1.0 },
+  // (28.10.2026, renders 1-4: the street faces between the glass strips and the white pilasters -
+  // silver metal cassettes in a grid, the sky in them; grey, not white)
+  'Facade silver': { set: 'plaster', mapless: true, tile: 2.2, color: '#a3abb8', roughness: 0.36, metalness: 0.3, normal: 0.06, vary: 0.01, env: 1.25, joints: [1.2, 1.65, 0.012, 9.0] },
   // the loggias' back walls: the model's warm beige (a deck texture there read as red from afar)
   // (Regnum renders 1, 2, 6: the balconies' back walls warm wood boards)
   // (the deck texture read as red stripes from afar: a plain warm light brown)
-  // (at night the balconies glow warm, render 2: the lit loggias)
-  'Loggia beige': { set: 'plaster', mapless: true, tile: 2.2, color: '#b99474', roughness: 0.7, normal: 0.15, vary: 0.03, env: 0.55, nightGlow: [0, 0.45], glowColor: '#ffb26b' },
+  // (at night the balconies glow warm, render 2: the lit loggias; 28.10.2026: a little only - render 3's
+  // wood stays dark brown at night, the light is the downlights' in the ceiling)
+  // (28.10.2026, renders 1, 4, 6: the wood a deeper warm brown than the beige of before)
+  // the loggias' floor: grey porcelain (a white slab top read as a white shelf from above)
+  'Loggia floor': { set: 'concrete', tile: 1.2, color: '#9a9ea4', roughness: 0.6, normal: 0.3, vary: 0.02, env: 0.6 },
+  'Loggia beige': { set: 'plaster', mapless: true, tile: 2.2, color: '#5f4836', roughness: 0.7, normal: 0.15, vary: 0.03, env: 0.55, nightGlow: [0, 0.08], glowColor: '#b08a6a' },
   'Stone pale': { set: 'plaster', mapless: true, tile: 2.2, color: '#b8bbbe', roughness: 0.7, normal: 0.25, env: 0.6 },
   // the cornice bands: bronze-gold as on the renders (the earlier #e8c08a was the yellowest thing on the facade)
   'Stone gold': { set: 'plaster', mapless: true, tile: 2.2, color: '#d0a062', roughness: 0.62, normal: 0.35, vary: 0.03, env: 0.6 },
@@ -381,7 +411,7 @@ const LIB = {
   // facing brick drawn in the browser (textures.js brickTextures): sandy multi-tone and graphite
   'Brick tan': { brick: 'tan', tile: 2.0, color: '#ffffff', roughness: 1, normal: 0.8, vary: 0.04, env: 0.45 },
   'Brick dark': { brick: 'dark', tile: 2.0, color: '#ffffff', roughness: 1, normal: 0.8, vary: 0.03, env: 0.5 },
-  'Stone white': { set: 'plaster', mapless: true, tile: 2.2, color: '#efede7', roughness: 0.75, normal: 0.22, vary: 0.015, env: 0.8 },
+  'Stone white': { set: 'plaster', mapless: true, tile: 2.2, color: '#e3e5e8', roughness: 0.75, normal: 0.22, vary: 0.015, env: 0.8 },
   'Stone dark': { set: 'concrete', tile: 2.5, color: '#51545d', roughness: 0.72, normal: 0.35, vary: 0.02, env: 0.6 },
   'Frame dark': { color: '#2c3034', roughness: 0.38, metalness: 0.55, env: 0.9 },
   'Frame crown': { color: '#80868b', roughness: 0.45, metalness: 0.5, env: 0.8 },
@@ -420,7 +450,8 @@ const LIB = {
   'Stained pink': glass('#86364f', 0.05),
   'Stained blue': glass('#27427c', 0.05),
   'Stained violet': glass('#53357a', 0.05),
-  'Railing glass': { color: '#c8d8dc', roughness: 0.04, opacity: 0.2, transparent: true, env: 1 },
+  // (Regnum renders 1, 4, 6: the balconies' glass a tinted blue-grey, read as panels from the street)
+  'Railing glass': { color: '#8e9cab', roughness: 0.04, opacity: 0.42, transparent: true, env: 1.2 },
   'Railing glass dark': { color: '#2d3d46', roughness: 0.04, opacity: 0.72, transparent: true, env: 1 },
   // ground
   // asphalt: the photographed set at 6 m a tile (its stains then read as wear, not as blotches),
@@ -451,6 +482,9 @@ const LIB = {
   'Cobble joint': { color: '#8a857e', roughness: 1 },
   // (the deck texture is red on its own: a cooler tint keeps it the warm brown of render 6)
   Wood: { set: 'deck', tile: 1.8, color: '#bfae98', roughness: 0.85, normal: 0.6 },
+  // the podium's wood-clad piers (render 6: a muted warm brown in vertical boards; the deck texture read
+  // red-orange there)
+  'Podium wood': { set: 'plaster', mapless: true, tile: 2.2, color: '#5d4636', roughness: 0.7, normal: 0.1, vary: 0.03, env: 0.6, joints: [0.15, 1000, 0.012, 0] },
   'Lattice wood': { set: 'deck', tile: 1.8, color: '#f0d2ad', roughness: 0.85, normal: 0.4 },
   'Rubber blue': { set: 'rubber', tile: 2, color: '#3f6ea8', roughness: 1, normal: 0.7 },
   // the school (21.10.2026): white render, coloured fins, a dark stone plinth

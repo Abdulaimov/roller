@@ -58,7 +58,7 @@ def build(mats, col, fr, towers_fp):
             s = i * step
             p = (a[0] + u[0] * s - n[0] * 0.15, a[1] + u[1] * s - n[1] * 0.15)
             if i % 3 == 0:
-                mb.box(p[0], p[1], 0.0, 0.9, 0.56, TOP - 0.45, 'Wood', rot=rot)
+                mb.box(p[0], p[1], 0.0, 0.9, 0.56, TOP - 0.45, 'Podium wood', rot=rot)
                 for t in (-0.3, -0.1, 0.1, 0.3):   # the boards' joints
                     q = (p[0] + u[0] * t - n[0] * 0.285, p[1] + u[1] * t - n[1] * 0.285)
                     mb.box(q[0], q[1], 0.0, 0.015, 0.01, TOP - 0.45, 'Shop frame', rot=rot)

@@ -3,6 +3,7 @@
 // reports where the walker ended (never in a building, never off the ground), takes pictures.
 //   node tools/ab/site_walk.mjs OUTDIR [--from B] [--w 1280 --h 800]
 import { chromium } from 'playwright-core';
+import CHROME from './chrome.mjs';
 import fs from 'node:fs';
 
 const args = process.argv.slice(2);
@@ -11,7 +12,7 @@ const out = args[0];
 const from = opt('--from', null);
 fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({
-  executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`,
+  executablePath: CHROME,
   headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: +opt('--w', 1280), height: +opt('--h', 800) } });
