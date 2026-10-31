@@ -489,7 +489,19 @@ def facade_floor(mb, block, plan, h, skin, top=False, zones=True, fin_on=True, t
         face = facing(bounds, (c[0] + n_out[0] * t / 2, c[1] + n_out[1] * t / 2), n_out)
         sk = skin[face]
         z = zone(face, c)
-        if not to_balcony and z and z[2] in ('glass', 'lilac', 'blank'):
+        # a blank zone (no window there on the renders): every window turned its way, whatever side
+        # the nearest-side rule gave it (the corner setbacks' windows went to the side face) and next
+        # to a loggia too - only the glazing across a loggia's own open front stays; the wall is
+        # closed over the opening cut for it
+        turned = next((sd for sd, (sx, sy) in SIDES.items() if n_out[0] * sx + n_out[1] * sy > 0.7), None)
+        zb = zone(turned, c) if turned else None
+        if zb and zb[2] == 'blank' and not (to_balcony and outdoor.buffer(0.3).contains(Point(c))):
+            a_, b_ = L / 2 + 0.006, t / 2
+            fill = Polygon([(c[0] + u[0] * su * a_ + v[0] * sv * b_, c[1] + u[1] * su * a_ + v[1] * sv * b_)
+                            for su, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+            mb.prism(fill, 0.0, h, ZONE_CLAD['blank'])
+            continue
+        if not to_balcony and z and z[2] in ('glass', 'lilac'):
             # under a curtain strip, behind the fluted strip (zone_dress): the window is the strip's
             continue
         wall_mat = ZONE_CLAD[z[2]] if z else CLAD[sk]
