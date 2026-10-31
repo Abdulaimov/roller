@@ -64,7 +64,8 @@ export async function loadComplex(apartments, renderer, onProgress) {
     if (d.tower && d.part === 'roof') tower(d.tower).roof = obj;
     else if (d.tower && d.floor) {
       const f = (tower(d.tower).floors[d.floor] ??= {});
-      f[d.part === 'walls' ? 'walls' : 'slab'] = obj;
+      // (decor: what one floor has of its own - plants on its balconies, the uplights at the foot)
+      f[d.part === 'walls' || d.part === 'decor' ? d.part : 'slab'] = obj;
     }
   });
 
@@ -169,6 +170,7 @@ export async function loadComplex(apartments, renderer, onProgress) {
         const above = k === towerKey && n > floor;
         setPart(f, 'slab', !above);
         setPart(f, 'walls', !above && !(k === towerKey && n === floor));
+        setVisible(f.decor, !above && !(k === towerKey && n === floor));
         setVisible(t.roof, k !== towerKey);
       });
       flush();
@@ -178,6 +180,7 @@ export async function loadComplex(apartments, renderer, onProgress) {
       each((k, n, f, t) => {
         setPart(f, 'slab', true);
         setPart(f, 'walls', !(k === openTower && n === openFloor));
+        setVisible(f.decor, !(k === openTower && n === openFloor));
         setVisible(t.roof, true);
       });
       flush();
@@ -188,6 +191,7 @@ export async function loadComplex(apartments, renderer, onProgress) {
         const v = !keys.includes(k);
         setPart(f, 'slab', v);
         setPart(f, 'walls', v);
+        setVisible(f.decor, v);
         setVisible(t.roof, v);
       });
       flush();

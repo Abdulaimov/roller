@@ -179,7 +179,11 @@ def build_site(mats, col, towers, podium_o):
     base = region.difference(asphalt)
     mb.polygon_face(region.buffer(400).difference(region), -0.05, 'Ground')
     lawn_city = base.difference(city_pav).difference(pav).difference(plot).difference(unary_union(houses).buffer(0.5) if houses else Polygon())
-    raised(mb, lawn_city, Z['lawn'] - 0.05, 'Lawn')
+    # (renders 4 and 5: round the block the city is grey - paved squares and yards with trees in
+    # them, the houses white; the lawns further out stay)
+    city_sq = lawn_city.intersection(Point(0, 0).buffer(150))
+    raised(mb, lawn_city.difference(city_sq), Z['lawn'] - 0.05, 'Lawn')
+    raised(mb, city_sq, Z['paving'] - 0.04, 'City paving')
     raised(mb, city_pav.difference(asphalt).difference(pav), Z['paving'], 'Sidewalk')
     raised(mb, pav.difference(yard), Z['paving'], 'Paving')
     raised(mb, green, Z['lawn'], 'Lawn')
@@ -204,6 +208,33 @@ def build_site(mats, col, towers, podium_o):
             if not asphalt.contains(Point(c)):
                 continue
             mb.box(c[0], c[1], 0.005, 3.0, 0.14, 0.01, 'Road line', rot=math.atan2(u[1], u[0]))
+
+    # the zebra crossings at the corner, over both streets (renders 1, 4)
+    crn = random.Random('corner')   # (its own: the courtyard keeps its draws)
+    rot_x = math.radians(-49.5)   # the sheet's x on the ground
+    for k in range(8):
+        c = S(25.75, NARZ[0] + 0.5 + k * (NARZ[1] - NARZ[0] - 1.0) / 7)
+        mb.box(c[0], c[1], 0.005, 3.5, 0.5, 0.012, 'Road line', rot=rot_x)
+    for k in range(12):
+        c = S(HUSZ[0] + 0.5 + k * (HUSZ[1] - HUSZ[0] - 1.0) / 11, 25.75)
+        mb.box(c[0], c[1], 0.005, 0.5, 3.5, 0.012, 'Road line', rot=rot_x)
+    # the corner's bed along кӯчаи Нарзиқулова (render 4): dark gravel, a lawn curving through it, a
+    # clipped ball, two clipped hedges, cypresses round it and by the crossing
+    bed = SB(8.0, 25.2, 25.0, 30.3)
+    mb.prism(bed, 0.0, Z['paving'] + 0.06, 'Kerb', 'Mulch')
+    wave = [(8.0 + 17.0 * i / 24, 27.6 + 1.5 * math.sin(math.pi * 2 * i / 24)) for i in range(25)]
+    curve = SP([(x, y + 0.9) for x, y in wave] + [(x, y - 0.9) for x, y in reversed(wave)]).intersection(bed.buffer(-0.3))
+    raised(mb, curve, Z['paving'] + 0.1, 'Lawn')
+    c = S(12.0, 27.4)
+    mb.blob(c[0], c[1], Z['paving'] + 0.55, 0.9, 0.9, 0.55, 'Shrub', subdiv=2, jitter=0.03, rnd=crn)
+    for hx0, hy0, hx1, hy1 in ((18.5, 25.6, 24.4, 26.3), (19.5, 28.6, 24.4, 29.3)):
+        mb.prism(SB(hx0, hy0, hx1, hy1), Z['paving'], Z['paving'] + 0.75, 'Shrub', 'Shrub')
+    for x, y in ((10.0, 29.6), (14.5, 25.9), (27.2, 28.6), (27.2, 17.6), (27.2, 19.8), (21.2, 21.0)):
+        c = S(x, y)
+        log_tree(mb, c[0], c[1], Z['paving'], crn.uniform(4.8, 5.6), 0.7, 'conifer')
+        trees.append(c)
+        LS.WALK['posts'].append([c[0], c[1], 0.45])
+    LS.WALK['solids'].append(bed)
 
     # ---------------- the courtyard (renders 5 and 8; no landscaping plan in the book, the pieces
     # where render 8 shows them, read off the render by eye - the camera looks east along В's yard face):
@@ -348,10 +379,28 @@ def build_site(mats, col, towers, podium_o):
             mb.prism(got[2].buffer(-0.12), Z['paving'] + 0.45, Z['paving'] + 1.0, 'Shrub', 'Shrub')
             LS.WALK['solids'].append(got[2])
 
+    # the yard's edge to the shopping centre's square: a white retaining wall with a dark slatted
+    # fence on it (renders 5 and 8, right)
+    tc = [g for q, g in zip(schema, schema_g) if q['fill'][0] < 0.3]
+    if tc:
+        edge = yard.exterior.intersection(tc[0].buffer(4.6, join_style='mitre'))
+        for ln in getattr(edge, 'geoms', [edge]):
+            if ln.geom_type != 'LineString' or ln.length < 2.0:
+                continue
+            pts = list(ln.coords)
+            n = len(pts)
+            mb.tube(pts, [0.0] * n, [Z['paving'] + 0.9] * n, 0.3, 'Pilaster white')
+            mb.ribbon(pts, Z['paving'] + 0.9, Z['paving'] + 2.1, 'Screen dark', double=True)
+            mb.tube(pts, [Z['paving'] + 2.1] * n, [Z['paving'] + 2.16] * n, 0.08, 'Frame dark')
+            for k in range(int(ln.length / 2.5) + 1):
+                q = ln.interpolate(min(ln.length, k * 2.5))
+                mb.box(q.x, q.y, Z['paving'] + 0.9, 0.08, 0.08, 1.26, 'Frame dark')
+            LS.WALK['solids'].append(ln.buffer(0.25))
+
     # ---------------- street trees: on the far pavements trees of the street; on the podium's own
     # pavements narrow cypresses and a low clipped hedge (renders 1, 4, 6)
-    for (a, b), step, near in [(((px0 - 60, NARZ[1] + 2.5), (px1 + 120, NARZ[1] + 2.5)), 11.0, False),
-                               (((HUSZ[1] + 2.5, py0 - 120), (HUSZ[1] + 2.5, py1 + 60)), 11.0, False),
+    for (a, b), step, near in [(((px0 - 60, NARZ[1] + 2.5), (px1 + 120, NARZ[1] + 2.5)), 8.0, False),
+                               (((HUSZ[1] + 2.5, py0 - 120), (HUSZ[1] + 2.5, py1 + 60)), 8.0, False),
                                (((NARZ_BAY[3][0] - 2, 23.4), (NARZ_BAY[2][0] + 2, 23.4)), 12.0, True),
                                (((22.4, HUSZ_BAY[0][1] - 2), (22.4, HUSZ_BAY[1][1] + 2)), 12.0, True)]:
         A, B = S(*a), S(*b)
@@ -368,6 +417,16 @@ def build_site(mats, col, towers, podium_o):
             else:
                 log_tree(mb, x, y, Z['paving'], rnd.uniform(8, 11), rnd.uniform(2.6, 3.6), 'broad')
             trees.append((x, y))
+        if not near:
+            # (the far kerbs: the trees stand in a clipped hedge, render 4)
+            off = (-(B[1] - A[1]) / L, (B[0] - A[0]) / L)
+            side = -1.4 if a[1] == b[1] else 1.4
+            ln = LineString([(A[0] + off[0] * side, A[1] + off[1] * side), (B[0] + off[0] * side, B[1] + off[1] * side)])
+            hedge = ln.buffer(0.45, cap_style=2).difference(asphalt.buffer(0.3)).difference(unary_union(houses).buffer(1.0))
+            for q in parts(hedge):
+                if q.area > 0.5:
+                    mb.prism(q, Z['paving'], Z['paving'] + 0.65, 'Shrub', 'Shrub')
+                    LS.WALK['solids'].append(q.buffer(0.1))
         if near:
             hedge = LineString([A, B]).buffer(0.3, cap_style=2).difference(podium_o.buffer(1.0)).difference(asphalt.buffer(0.6))
             for t_ in towers:
@@ -378,7 +437,7 @@ def build_site(mats, col, towers, podium_o):
                     LS.WALK['solids'].append(q.buffer(0.1))
     # trees in the city's yards and along its pavements (OSM's lawns, none on the roads)
     for k in range(260):
-        p = rand_in(lawn_city.intersection(Point(0, 0).buffer(420)), rnd)
+        p = rand_in(lawn_city.intersection(Point(0, 0).buffer(420)), rnd)   # (city_sq is part of it)
         if p is None or p.distance(plot) < 8 or asphalt.buffer(1.5).contains(p):
             continue
         log_tree(mb, p.x, p.y, Z['lawn'], rnd.uniform(8, 15), rnd.uniform(3, 5), 'broad' if rnd.random() < 0.85 else 'conifer')

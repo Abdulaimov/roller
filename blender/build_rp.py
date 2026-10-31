@@ -58,6 +58,8 @@ def main():
     plans = C.load_plans()
     root = get_collection('Regnum Plaza')
     tw = [T.build_block(k, mats, root, plans) for k in args.blocks.split(',')]
+    if set(args.blocks.split(',')) >= {'A', 'B', 'V'}:
+        T.joints(mats, root, plans)
     from shapely.ops import unary_union
     from shapely.geometry import Polygon
     fp = unary_union([Polygon(t['outline']) for t in tw])

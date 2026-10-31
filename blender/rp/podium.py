@@ -101,6 +101,29 @@ def build(mats, col, fr, towers_fp):
         mb.box(mx - n[0] * 0.2, my - n[1] * 0.2, 3.4, L, 0.5, GROUND - 0.45 - 3.4, 'Stone dark', rot=rot)
         for e in (-L / 2 + 0.25, L / 2 - 0.25):
             mb.box(mx + u[0] * e - n[0] * 0.2, my + u[1] * e - n[1] * 0.2, 0.0, 0.5, 0.5, 3.4, 'Stone dark', rot=rot)
+    # the corner on the crossing (renders 4, 6): an L-shaped canopy over the corner shop's doors -
+    # dark beams, timber slats across them, two lamps in it at night
+    cs = Point(sheet_to_site(19.7, 19.3))
+    cpts = list(O.exterior.coords)[:-1]
+    ci = min(range(len(cpts)), key=lambda i: Point(cpts[i]).distance(cs))
+    if Point(cpts[ci]).distance(cs) < 5.0:
+        c0 = cpts[ci]
+        for nb in (cpts[ci - 1], cpts[(ci + 1) % len(cpts)]):
+            L = min(8.0, math.dist(c0, nb))
+            u = ((nb[0] - c0[0]) / math.dist(c0, nb), (nb[1] - c0[1]) / math.dist(c0, nb))
+            n = (u[1], -u[0])
+            if O.contains(Point(c0[0] + u[0] * 1 + n[0] * 0.5, c0[1] + u[1] * 1 + n[1] * 0.5)):
+                n = (-n[0], -n[1])
+            rot = math.atan2(u[1], u[0])
+            zc = GROUND - 1.35
+            for off in (0.35, 2.5):
+                q = (c0[0] + u[0] * L / 2 + n[0] * off, c0[1] + u[1] * L / 2 + n[1] * off)
+                mb.box(q[0], q[1], zc, L + (2.6 if off > 1 else 0.0), 0.22, 0.32, 'Frame dark', rot=rot)
+            for k3 in range(int(L / 0.32)):
+                q = (c0[0] + u[0] * (0.2 + k3 * 0.32) + n[0] * 1.45, c0[1] + u[1] * (0.2 + k3 * 0.32) + n[1] * 1.45)
+                mb.box(q[0], q[1], zc + 0.32, 0.07, 2.3, 0.1, 'Wood', rot=rot)
+            q = (c0[0] + u[0] * L * 0.6 + n[0] * 1.45, c0[1] + u[1] * L * 0.6 + n[1] * 1.45)
+            mb.box(q[0], q[1], zc - 0.03, 0.3, 0.3, 0.03, 'Night white', rot=rot)
     # the doors from the courtyard: dark glass doors in a frame, a white canopy over them
     for (dx, dy), (ox, oy) in DOORS:
         c0 = sheet_to_site(dx, dy)

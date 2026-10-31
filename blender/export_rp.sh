@@ -11,7 +11,7 @@ BLENDER=${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}
 export PATH="$HOME/.local/opt/node/bin:$PATH"
 OUT=build/rp/rp
 mkdir -p build/rp public/models src/model
-PYTHONPATH=.pylib-blender "$BLENDER" -b --factory-startup --python-use-system-env -P blender/build_rp.py -- --out "$OUT" "$@"
+PYTHONPATH=.pylib-blender "$BLENDER" -b --factory-startup --python-use-system-env --python-exit-code 1 -P blender/build_rp.py -- --out "$OUT" "$@"
 GT=(npx --yes @gltf-transform/cli@4.1.1)
 "${GT[@]}" dedup "$OUT.glb" "$OUT.dedup.glb"
 "${GT[@]}" weld "$OUT.dedup.glb" "$OUT.weld.glb"

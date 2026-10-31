@@ -7,7 +7,7 @@
 //   lamps: the build's lamp heads (model/complex.json lamps: [x, y, z, aim x, aim y, kind], site
 //   metres; kind 0 a path lamp, 1 a street lamp on its arm, 2 a floodlight aimed at the pitch)
 import * as THREE from 'three';
-import { LAMP, NIGHT } from './materials.js';
+import { LAMP, NIGHT, SKYDARK } from './materials.js';
 
 export const DAY = 15; // the hour the scene was lit for: the slider starts here
 export const FIRST = 6, LAST = 23.5; // the slider's hours
@@ -294,6 +294,8 @@ export function timeOfDay({ scene, camera, renderer, world, lamps = [], shops = 
     meshes: [],
   };
   const WARM = new THREE.Color(1.0, 0.56, 0.24), COOL = new THREE.Color(0.95, 0.97, 1.0);
+  // (the LED lines of the night renders are warm white, not blue-white - renders 2, 3)
+  const LINE = new THREE.Color(1.0, 0.84, 0.6);
 
   function collect() {
     // the facade lighting's meshes take the night materials (hidden by day)
@@ -346,7 +348,8 @@ export function timeOfDay({ scene, camera, renderer, world, lamps = [], shops = 
     // its clouds lit by the low sun: pink and orange, then grey and dark as the light goes
     world.cloudTint?.setRGB(1, 1, 1).lerp(cloudDusk, g).multiplyScalar((1 - 0.9 * n) * (1 - 0.3 * g));
     moonSky.intensity = dayFill * (1 - n) + 0.42 * n;
-    for (const [m, v] of base.glass) m.envMapIntensity = v * (1 - 0.9 * n) * (1 - 0.3 * g);
+    // (at dusk the glass still mirrors the bright west - renders 2, 3: silver-blue, a few rooms lit)
+    for (const [m, v] of base.glass) m.envMapIntensity = v * (1 - 0.85 * n) * (1 - 0.1 * g);
     for (const [m, v] of base.glow) m.emissiveIntensity = mix(v, Math.max(v, 1) * 5, L);
     for (const [m, [d, nt]] of base.signs) m.emissiveIntensity = mix(d, nt, L);
 
@@ -355,6 +358,7 @@ export function timeOfDay({ scene, camera, renderer, world, lamps = [], shops = 
     scene.fog.density = base.fogD * (1 - 0.5 * n);
 
     NIGHT.value = L;
+    SKYDARK.value = n;
     domeMat.uniforms.uSun.value.copy(dirOf(A, el));
     domeMat.uniforms.uNight.value = n;
     domeMat.uniforms.uDusk.value = g;
@@ -367,7 +371,7 @@ export function timeOfDay({ scene, camera, renderer, world, lamps = [], shops = 
     for (const o of facade.meshes) o.visible = L > 0.01;
     facade.wash.color.copy(WARM).multiplyScalar(30 * L);
     facade.white.color.copy(COOL).multiplyScalar(28 * L);
-    facade.line.color.setScalar(2.6 * L);
+    facade.line.color.copy(LINE).multiplyScalar(2.8 * L);
     glowMat.opacity = 0.75 * L;
     cityMat.opacity = 0.85 * L;
     changed(state);

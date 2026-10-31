@@ -13,7 +13,7 @@ AB_SPECS = {
     'Tower glass': ('#3f5866', 0.05, 0.0, {}),
     'Mesh screen': ('#cfd4d6', 0.5, 0.6, {'alpha': 0.55}),
     'Roof': ('#8d8c88', 0.95, 0.0, {}),
-    'Plant room': ('#d9d6d0', 0.8, 0.0, {}),
+    'Plant room': ('#46484d', 0.6, 0.1, {}),
     # shops behind the glass
     'Shop glass': ('#9fb4bb', 0.03, 0.0, {'alpha': 0.25}),
     'Shop floor': ('#d9d3c8', 0.4, 0.0, {}),
@@ -73,10 +73,17 @@ AB_SPECS = {
     'Facade white': ('#eeebe5', 0.6, 0.0, {}),
     # (Regnum renders 1-4: the street faces' silver cladding between the glass strips)
     'Facade silver': ('#b4bac2', 0.35, 0.4, {}),
+    # (Regnum's facade zones, 30.10.2026: the curtain strips, Б's sand walls, its bronze T, its fluted strip)
+    'Strip glass': ('#3c4a5c', 0.04, 0.0, {}),
+    'Strip wood': ('#8f6a47', 0.6, 0.0, {}),
+    'Fin lilac': ('#8c8a9d', 0.4, 0.5, {}),
     'Loggia floor': ('#8c9096', 0.6, 0.0, {}),
+    'City paving': ('#b9bcc0', 0.9, 0.0, {}),
     'Podium wood': ('#5a4535', 0.7, 0.0, {}),
     'Ramp dark': ('#16181b', 0.9, 0.0, {}),
-    'Loggia beige': ('#d8b991', 0.75, 0.0, {}),
+    'Loggia beige': ('#7d5c40', 0.65, 0.0, {}),
+    # the loggias' round downlights, on by day and by night (renders 1-6)
+    'Downlight': ('#fff3df', 0.4, 0.0, {'emission': ('#ffe7c2', 3.0)}),
     'Mulch': ('#4a3426', 1.0, 0.0, {}),
     'Frame crown': ('#7a7f84', 0.45, 0.5, {}),
     'Glass light': ('#8a9aa0', 0.05, 0.0, {}),

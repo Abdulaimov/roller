@@ -10,6 +10,8 @@ import { alphaTexture, brickTextures, groundTexture } from './textures.js';
 const BASE = `${import.meta.env.BASE_URL}textures/`;
 // lights on at dusk and at night, 0..1 (src/night.js): the windows of the complex and of the city
 export const NIGHT = { value: 0 };
+// the sky's darkness (night.js): the glass mirrors the sky until it is dark, not until the lights come on
+export const SKYDARK = { value: 0 };
 
 // The light of the street lamps, the pitch's floodlights and the shop windows at night: a map of it
 // seen from above (src/night.js draws it from the lamps' places), added on every lit surface by its
@@ -228,7 +230,9 @@ const INTERIOR = /* glsl */ `
       float up = rr.y;
       vec3 skyR = mix(vec3(0.80, 0.85, 0.88), vec3(0.36, 0.52, 0.74), smoothstep(0.02, 0.7, up));
       skyR = mix(vec3(0.30, 0.31, 0.28), skyR, smoothstep(-0.06, 0.03, up));
-      skyR *= 1.0 - 0.9 * uNight;   // the night sky (and the lit city in it) is dark in the glass
+      // the night sky (and the lit city in it) is dark in the glass; at dusk, with the lights already
+      // on, it still mirrors the bright sky (renders 2, 3: silver-blue glass, a few rooms lit)
+      skyR *= 1.0 - 0.9 * uSkyDark;
       float cosv = clamp(-dot(dir, Nn), 0.0, 1.0);
       float fres = uMirror + (1.0 - uMirror) * pow(1.0 - cosv, 5.0);
       // a lit room at night shows its own warm light, not the glass's daytime tint
@@ -271,6 +275,7 @@ function patch(mat, { vary = 0, detile = false, leafy = false, tint = null, faca
     sh.uniforms.uMirror = { value: it[7] ?? 0.1 };
     sh.uniforms.uRefl = { value: it[8] ?? 0.9 };
     sh.uniforms.uNight = NIGHT;
+    sh.uniforms.uSkyDark = SKYDARK;
     // the rooms' light at night: colour and the share of rooms lit; the glow of the unlit ones
     const nl = new THREE.Color(night?.lamp ?? '#9e8561');
     sh.uniforms.uNightLamp = { value: new THREE.Vector4(nl.r, nl.g, nl.b, night?.share ?? 0.44) };
@@ -288,7 +293,7 @@ function patch(mat, { vary = 0, detile = false, leafy = false, tint = null, faca
           on = mat3(instanceMatrix) * on; // the typical floors are instances, turned with their block
         #endif
         vWorldNormal = normalize(mat3(modelMatrix) * on);`);
-    let frag = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;\nuniform float uVary;\nuniform vec3 uTint;\nuniform vec3 uFacade;\nuniform vec4 uInt;\nuniform vec3 uInt2;\nuniform float uMirror;\nuniform float uRefl;\nuniform float uNight;\nuniform vec4 uNightLamp;\nuniform float uNightDim;\nuniform vec4 uJoint;\n${NOISE}`);
+    let frag = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;\nuniform float uVary;\nuniform vec3 uTint;\nuniform vec3 uFacade;\nuniform vec4 uInt;\nuniform vec3 uInt2;\nuniform float uMirror;\nuniform float uRefl;\nuniform float uNight;\nuniform float uSkyDark;\nuniform vec4 uNightLamp;\nuniform float uNightDim;\nuniform vec4 uJoint;\n${NOISE}`);
     if (detile) {
       frag = frag.replace('#include <map_fragment>', `
         #ifdef USE_MAP
@@ -356,7 +361,8 @@ const LIB = {
   // make the white stone grey; the renders' white is white)
   'White band': { set: 'plaster', mapless: true, tile: 2.2, color: '#e4e6e9', roughness: 0.6, normal: 0.15, vary: 0.01, env: 1.0 },
   // (Regnum renders 4, 5: the roof plant rooms mid grey under a white cap)
-  'Plant room': { set: 'plaster', mapless: true, tile: 2.2, color: '#8e9297', roughness: 0.8, normal: 0.2, env: 0.6 },
+  // (the plant rooms on the roofs: graphite tiles, render 4)
+  'Plant room': { set: 'plaster', mapless: true, tile: 2.2, color: '#4c4c52', roughness: 0.45, metalness: 0.12, normal: 0.08, vary: 0.01, env: 0.9, joints: [1.2, 1.1, 0.014, 0] },
   'Stone fin': { set: 'concrete', tile: 3, color: '#e3d6c2', roughness: 0.9, normal: 0.5 },
   Frame: { color: '#d7d1c6', roughness: 0.42, metalness: 0, env: 0.8 },
   Metal: { color: '#9aa0a5', roughness: 0.32, metalness: 0.9, env: 1 },
@@ -392,7 +398,14 @@ const LIB = {
   'Facade white': { set: 'plaster', mapless: true, tile: 2.2, color: '#d2d6db', roughness: 0.5, metalness: 0.08, normal: 0.12, vary: 0.01, env: 1.0 },
   // (28.10.2026, renders 1-4: the street faces between the glass strips and the white pilasters -
   // silver metal cassettes in a grid, the sky in them; grey, not white)
-  'Facade silver': { set: 'plaster', mapless: true, tile: 2.2, color: '#a3abb8', roughness: 0.36, metalness: 0.3, normal: 0.06, vary: 0.01, env: 1.25, joints: [1.2, 1.65, 0.012, 10.1] },
+  'Facade silver': { set: 'plaster', mapless: true, tile: 2.2, color: '#bcc2cb', roughness: 0.36, metalness: 0.25, normal: 0.06, vary: 0.01, env: 1.2, joints: [1.2, 1.65, 0.012, 10.1] },
+  // (30.10.2026, the facade zones read off renders 1-5 and the developer's model, blender/rp/towers.py
+  // ZONES): the curtain strips pilaster to pilaster - blue-grey mirror glass, the rooms behind dim
+  // (render 3: the strips are the sky's colour, a fine dark grid on them; the model's are black)
+  'Strip glass': { ...glass('#000000', 0.02, { env: 1.55, tint: '#93a5bd', interior: [1.6, 3.3, 3.2, 10.1, 0.12, 0.3, 0.005, 0.55, 1.35], specular: '#dde6ef' }), physical: { ior: 2.0 } },
+  // Б's T (render 4: warm wood, as the loggias' back walls) and its fluted strip
+  'Strip wood': { set: 'plaster', mapless: true, tile: 2.2, color: '#8f6a47', roughness: 0.6, normal: 0.1, vary: 0.03, env: 0.6, joints: [0.18, 1000, 0.01, 0] },
+  'Fin lilac': { color: '#8a879b', roughness: 0.4, metalness: 0.45, env: 1.0 },
   // the loggias' back walls: the model's warm beige (a deck texture there read as red from afar)
   // (Regnum renders 1, 2, 6: the balconies' back walls warm wood boards)
   // (the deck texture read as red stripes from afar: a plain warm light brown)
@@ -401,7 +414,9 @@ const LIB = {
   // (28.10.2026, renders 1, 4, 6: the wood a deeper warm brown than the beige of before)
   // the loggias' floor: grey porcelain (a white slab top read as a white shelf from above)
   'Loggia floor': { set: 'concrete', tile: 1.2, color: '#9a9ea4', roughness: 0.6, normal: 0.3, vary: 0.02, env: 0.6 },
-  'Loggia beige': { set: 'plaster', mapless: true, tile: 2.2, color: '#5f4836', roughness: 0.7, normal: 0.15, vary: 0.03, env: 0.55, nightGlow: [0, 0.08], glowColor: '#b08a6a' },
+  'Loggia beige': { set: 'plaster', mapless: true, tile: 2.2, color: '#7d5c40', roughness: 0.62, normal: 0.12, vary: 0.03, env: 0.55, nightGlow: [0, 0.06], glowColor: '#b08a6a', joints: [0.18, 1000, 0.01, 0] },
+  // the loggias' round downlights: on in every render, day and night
+  Downlight: { color: '#fff6ea', roughness: 0.4, env: 0.3, nightGlow: [1.3, 3.2], glowColor: '#ffe3b5' },
   'Stone pale': { set: 'plaster', mapless: true, tile: 2.2, color: '#b8bbbe', roughness: 0.7, normal: 0.25, env: 0.6 },
   // the cornice bands: bronze-gold as on the renders (the earlier #e8c08a was the yellowest thing on the facade)
   'Stone gold': { set: 'plaster', mapless: true, tile: 2.2, color: '#d0a062', roughness: 0.62, normal: 0.35, vary: 0.03, env: 0.6 },
@@ -452,7 +467,8 @@ const LIB = {
   'Stained blue': glass('#27427c', 0.05),
   'Stained violet': glass('#53357a', 0.05),
   // (Regnum renders 1, 4, 6: the balconies' glass a tinted blue-grey, read as panels from the street)
-  'Railing glass': { color: '#8e9cab', roughness: 0.04, opacity: 0.42, transparent: true, env: 1.2 },
+  // (the balconies' railings: light frosted glass with a dark handrail - renders 1, 3, 4, 6)
+  'Railing glass': { color: '#a9b8c8', roughness: 0.08, opacity: 0.6, transparent: true, env: 1.6 },
   'Railing glass dark': { color: '#2d3d46', roughness: 0.04, opacity: 0.72, transparent: true, env: 1 },
   // ground
   // asphalt: the photographed set at 6 m a tile (its stains then read as wear, not as blotches),
@@ -460,6 +476,8 @@ const LIB = {
   Asphalt: { set: 'asphalt', tile: 6, color: '#dedbd3', roughness: 1, normal: 0.6, vary: 0.05, detile: true },
   'Road line': { color: '#e4e2db', roughness: 0.7 },
   Sidewalk: { color: '#ffffff', roughness: 0.95, vary: 0.05, env: 0.6 },
+  // the city's squares round the block: the same slabs, grey (renders 4, 5)
+  'City paving': { color: '#c3c7cc', roughness: 0.95, vary: 0.05, env: 0.5 },
   // the plaza and the sidewalks: drawn pavers (textures.js), the photographed sets are dark and stained
   Paving: { color: '#f2eee8', roughness: 1, vary: 0.05, env: 0.35 },
   Kerb: { set: 'concrete', tile: 2, color: '#d9d4ca', roughness: 0.95, normal: 0.6 },
@@ -536,7 +554,7 @@ const LIB = {
 };
 
 // textures made on a canvas (textures.js) for surfaces with no photographed set
-const CANVAS = { 'Pool mosaic': 'mosaic', 'Copper screen': 'copper', Sidewalk: 'slabs', Paving: 'plaza', 'Screen dark': 'screen', Poster: 'poster' };
+const CANVAS = { 'Pool mosaic': 'mosaic', 'Copper screen': 'copper', Sidewalk: 'slabs', 'City paving': 'slabs', Paving: 'plaza', 'Screen dark': 'screen', Poster: 'poster' };
 
 let waterNormal = null;
 export const water = []; // normal maps to scroll each frame
